@@ -182,21 +182,24 @@ export async function processURL(url: string): Promise<ProcessResponse> {
 
 // Process file with Gemini 3 Flash (images, audio, video, PDF)
 export async function processFile(
-  file: File
+  file: File,
+  sourceType: string = 'file',
+  source: string = ''
 ): Promise<ProcessResponse> {
   try {
-    // Convert file to base64
-    const base64Data = await fileToBase64(file);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('sourceType', sourceType);
+    formData.append('source', source || file.name);
+
+    const headers = getAuthHeaders() as Record<string, string>;
+    // Let the browser set the boundary for multipart/form-data
+    delete headers['Content-Type'];
 
     const response = await fetch(`${API_BASE_URL}/process-file`, {
       method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({
-        fileData: base64Data,
-        mimeType: file.type,
-        fileName: file.name,
-        source: file.name
-      }),
+      headers,
+      body: formData,
     });
 
     if (response.status === 401) {

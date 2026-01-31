@@ -22,6 +22,8 @@ import NewCapsule from './app/NewCapsule';
 import Archive from './app/Archive';
 import Settings from './app/Settings';
 import Login from './app/Login';
+import { Toaster } from './components/ui/sonner';
+import { ThemeProvider } from 'next-themes';
 
 // Auth
 import { isAuthenticated } from './services/auth';
@@ -67,30 +69,33 @@ function LandingPage() {
 // Main App Component
 function App() {
   return (
-    <HashRouter>
-      <Routes>
-        {/* Public Routes */}
-        <Route path="/" element={<LandingPage />} />
-        <Route path="/login" element={<Login />} />
+    <ThemeProvider attribute="class" defaultTheme="light">
+      <HashRouter>
+        <Routes>
+          {/* Public Routes */}
+          <Route path="/" element={<LandingPage />} />
+          <Route path="/login" element={<Login />} />
 
-        {/* Protected App Routes */}
-        <Route
-          path="/app"
-          element={
-            <ProtectedRoute>
-              <AppLayout />
-            </ProtectedRoute>
-          }
-        >
-          <Route index element={<Navigate to="/app/dashboard" replace />} />
-          <Route path="dashboard" element={<Dashboard />} />
-          <Route path="capsule/:id" element={<CapsuleDetail />} />
-          <Route path="new" element={<NewCapsule />} />
-          <Route path="archive" element={<Archive />} />
-          <Route path="settings" element={<Settings />} />
-        </Route>
-      </Routes>
-    </HashRouter>
+          {/* Protected App Routes */}
+          <Route
+            path="/app"
+            element={
+              <ProtectedRoute>
+                <AppLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route index element={<Navigate to="/app/dashboard" replace />} />
+            <Route path="dashboard" element={<Dashboard />} />
+            <Route path="capsule/:id" element={<CapsuleDetail />} />
+            <Route path="new" element={<NewCapsule />} />
+            <Route path="archive" element={<Archive />} />
+            <Route path="settings" element={<Settings />} />
+          </Route>
+        </Routes>
+        <Toaster />
+      </HashRouter>
+    </ThemeProvider>
   );
 }
 

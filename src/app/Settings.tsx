@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import gsap from 'gsap';
-import { 
-  User, 
-  Bell, 
-  Link2, 
-  Shield, 
+import {
+  User,
+  Bell,
+  Link2,
+  Shield,
   Palette,
   Mail,
   MessageSquare,
@@ -14,21 +14,27 @@ import {
   Smartphone,
   Globe,
   Moon,
-  Sun
+  Sun,
+  Camera,
+  Download,
+  Trash2,
+  Lock
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
+import { useTheme } from 'next-themes';
 
-const integrations = [
-  { id: 'whatsapp', name: 'WhatsApp', icon: MessageSquare, connected: true, color: 'bg-green-500' },
-  { id: 'email', name: 'Email', icon: Mail, connected: true, color: 'bg-blue-500' },
-  { id: 'twitter', name: 'Twitter/X', icon: Twitter, connected: false, color: 'bg-black' },
+const integrationsList = [
+  { id: 'whatsapp', name: 'WhatsApp', icon: MessageSquare, color: 'bg-green-500' },
+  { id: 'email', name: 'Email', icon: Mail, color: 'bg-blue-500' },
+  { id: 'twitter', name: 'Twitter/X', icon: Twitter, color: 'bg-black' },
 ];
 
-const notificationSettings = [
+const notificationSettingsList = [
   { id: 'new_capsule', label: 'Nueva Cápsula creada', enabled: true },
   { id: 'daily_digest', label: 'Resumen diario', enabled: true },
   { id: 'weekly_report', label: 'Reporte semanal', enabled: false },
@@ -37,7 +43,15 @@ const notificationSettings = [
 
 export default function Settings() {
   const [activeSection, setActiveSection] = useState('profile');
-  const [notifications, setNotifications] = useState(notificationSettings);
+  const [notifications, setNotifications] = useState(notificationSettingsList);
+  const [profile, setProfile] = useState({
+    name: 'John Doe',
+    email: 'john@example.com',
+    company: 'TechCorp'
+  });
+  const [integrations, setIntegrations] = useState(['whatsapp', 'email']);
+  const [density, setDensity] = useState('Normal');
+  const { theme, setTheme } = useTheme();
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -48,12 +62,30 @@ export default function Settings() {
         { opacity: 1, y: 0, duration: 0.5, ease: 'expo.out' }
       );
     }
-  }, []);
+  }, [activeSection]);
 
   const toggleNotification = (id: string) => {
-    setNotifications(prev => 
+    setNotifications(prev =>
       prev.map(n => n.id === id ? { ...n, enabled: !n.enabled } : n)
     );
+    toast.success('Preferencia actualizada');
+  };
+
+  const toggleIntegration = (id: string) => {
+    setIntegrations(prev =>
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+    const isConnecting = !integrations.includes(id);
+    toast.success(isConnecting ? 'Integración conectada' : 'Integración desconectada');
+  };
+
+  const handleProfileSave = () => {
+    toast.success('Perfil actualizado correctamente');
+  };
+
+  const handleExport = () => {
+    toast.info('Preparando exportación de datos...');
+    setTimeout(() => toast.success('Archivo listo para descargar'), 2000);
   };
 
   const sections = [
@@ -80,11 +112,10 @@ export default function Settings() {
               <button
                 key={section.id}
                 onClick={() => setActiveSection(section.id)}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${
-                  activeSection === section.id
+                className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 ${activeSection === section.id
                     ? 'bg-black text-white'
                     : 'text-black/60 hover:bg-gray-100 hover:text-black'
-                }`}
+                  }`}
               >
                 <section.icon className="w-5 h-5" />
                 <span className="font-medium text-sm">{section.label}</span>
@@ -103,13 +134,24 @@ export default function Settings() {
             {activeSection === 'profile' && (
               <div className="p-6 lg:p-8">
                 <h2 className="text-xl font-semibold mb-6">Información de Perfil</h2>
-                
+
                 <div className="flex items-center gap-4 mb-8">
-                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center">
+                  <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-200 to-gray-300 flex items-center justify-center relative group">
                     <span className="text-2xl font-medium">JD</span>
+                    <button
+                      className="absolute inset-0 bg-black/40 rounded-full opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                      onClick={() => toast.info('Función de carga de imagen próximamente')}
+                    >
+                      <Camera className="w-6 h-6" />
+                    </button>
                   </div>
                   <div>
-                    <Button variant="outline" size="sm" className="rounded-full">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full"
+                      onClick={() => toast.info('Función de carga de imagen próximamente')}
+                    >
                       Cambiar Foto
                     </Button>
                   </div>
@@ -118,20 +160,35 @@ export default function Settings() {
                 <div className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium mb-2">Nombre</label>
-                    <Input defaultValue="John Doe" className="h-12 rounded-xl" />
+                    <Input
+                      value={profile.name}
+                      onChange={(e) => setProfile(prev => ({ ...prev, name: e.target.value }))}
+                      className="h-12 rounded-xl"
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">Email</label>
-                    <Input defaultValue="john@example.com" className="h-12 rounded-xl" />
+                    <Input
+                      value={profile.email}
+                      onChange={(e) => setProfile(prev => ({ ...prev, email: e.target.value }))}
+                      className="h-12 rounded-xl"
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium mb-2">Empresa</label>
-                    <Input defaultValue="TechCorp" className="h-12 rounded-xl" />
+                    <Input
+                      value={profile.company}
+                      onChange={(e) => setProfile(prev => ({ ...prev, company: e.target.value }))}
+                      className="h-12 rounded-xl"
+                    />
                   </div>
                 </div>
 
                 <div className="mt-8">
-                  <Button className="bg-black text-white hover:bg-black/90 rounded-full">
+                  <Button
+                    className="bg-black text-white hover:bg-black/90 rounded-full"
+                    onClick={handleProfileSave}
+                  >
                     Guardar Cambios
                   </Button>
                 </div>
@@ -142,15 +199,15 @@ export default function Settings() {
             {activeSection === 'notifications' && (
               <div className="p-6 lg:p-8">
                 <h2 className="text-xl font-semibold mb-6">Preferencias de Notificación</h2>
-                
+
                 <div className="space-y-4">
                   {notifications.map((notification) => (
-                    <div 
+                    <div
                       key={notification.id}
                       className="flex items-center justify-between p-4 bg-gray-50 rounded-xl"
                     >
                       <span className="font-medium">{notification.label}</span>
-                      <Switch 
+                      <Switch
                         checked={notification.enabled}
                         onCheckedChange={() => toggleNotification(notification.id)}
                       />
@@ -175,7 +232,9 @@ export default function Settings() {
                         <Smartphone className="w-5 h-5 text-black/60" />
                         <span>Push Notifications</span>
                       </div>
-                      <Badge variant="outline">Configurar</Badge>
+                      <Button variant="ghost" size="sm" onClick={() => toast.info('Permite las notificaciones en tu navegador')}>
+                        Configurar
+                      </Button>
                     </div>
                   </div>
                 </div>
@@ -186,40 +245,44 @@ export default function Settings() {
             {activeSection === 'integrations' && (
               <div className="p-6 lg:p-8">
                 <h2 className="text-xl font-semibold mb-6">Integraciones Conectadas</h2>
-                
+
                 <div className="space-y-4">
-                  {integrations.map((integration) => (
-                    <div 
-                      key={integration.id}
-                      className="flex items-center justify-between p-4 border border-gray-200 rounded-xl"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className={`w-10 h-10 rounded-xl ${integration.color} flex items-center justify-center`}>
-                          <integration.icon className="w-5 h-5 text-white" />
-                        </div>
-                        <div>
-                          <p className="font-medium">{integration.name}</p>
-                          <p className="text-sm text-black/60">
-                            {integration.connected ? 'Conectado' : 'No conectado'}
-                          </p>
-                        </div>
-                      </div>
-                      <Button 
-                        variant={integration.connected ? 'outline' : 'default'}
-                        size="sm"
-                        className="rounded-full"
+                  {integrationsList.map((integration) => {
+                    const isConnected = integrations.includes(integration.id);
+                    return (
+                      <div
+                        key={integration.id}
+                        className="flex items-center justify-between p-4 border border-gray-200 rounded-xl"
                       >
-                        {integration.connected ? (
-                          <>
-                            <Check className="w-4 h-4 mr-1" />
-                            Conectado
-                          </>
-                        ) : (
-                          'Conectar'
-                        )}
-                      </Button>
-                    </div>
-                  ))}
+                        <div className="flex items-center gap-4">
+                          <div className={`w-10 h-10 rounded-xl ${integration.color} flex items-center justify-center`}>
+                            <integration.icon className="w-5 h-5 text-white" />
+                          </div>
+                          <div>
+                            <p className="font-medium">{integration.name}</p>
+                            <p className="text-sm text-black/60">
+                              {isConnected ? 'Conectado' : 'No conectado'}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          variant={isConnected ? 'outline' : 'default'}
+                          size="sm"
+                          className="rounded-full"
+                          onClick={() => toggleIntegration(integration.id)}
+                        >
+                          {isConnected ? (
+                            <>
+                              <Check className="w-4 h-4 mr-1" />
+                              Conectado
+                            </>
+                          ) : (
+                            'Conectar'
+                          )}
+                        </Button>
+                      </div>
+                    );
+                  })}
                 </div>
 
                 <div className="mt-8 p-4 bg-gray-50 rounded-xl">
@@ -230,7 +293,11 @@ export default function Settings() {
                   <p className="text-sm text-black/60 mb-4">
                     Guarda artículos y páginas web directamente desde tu navegador.
                   </p>
-                  <Button variant="outline" className="rounded-full">
+                  <Button
+                    variant="outline"
+                    className="rounded-full"
+                    onClick={() => toast.info('Próximamente disponible en Chrome Web Store')}
+                  >
                     Instalar Extensión
                   </Button>
                 </div>
@@ -241,20 +308,32 @@ export default function Settings() {
             {activeSection === 'appearance' && (
               <div className="p-6 lg:p-8">
                 <h2 className="text-xl font-semibold mb-6">Apariencia</h2>
-                
+
                 <div className="space-y-6">
                   <div>
                     <label className="block text-sm font-medium mb-3">Tema</label>
                     <div className="grid grid-cols-3 gap-3">
-                      <button className="p-4 border-2 border-black rounded-xl flex flex-col items-center gap-2">
+                      <button
+                        onClick={() => setTheme('light')}
+                        className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${theme === 'light' ? 'border-black bg-gray-50' : 'border-gray-200'
+                          }`}
+                      >
                         <Sun className="w-6 h-6" />
                         <span className="text-sm font-medium">Claro</span>
                       </button>
-                      <button className="p-4 border border-gray-200 rounded-xl flex flex-col items-center gap-2 opacity-50">
+                      <button
+                        onClick={() => setTheme('dark')}
+                        className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${theme === 'dark' ? 'border-black bg-gray-50' : 'border-gray-200'
+                          }`}
+                      >
                         <Moon className="w-6 h-6" />
                         <span className="text-sm font-medium">Oscuro</span>
                       </button>
-                      <button className="p-4 border border-gray-200 rounded-xl flex flex-col items-center gap-2 opacity-50">
+                      <button
+                        onClick={() => setTheme('system')}
+                        className={`p-4 border-2 rounded-xl flex flex-col items-center gap-2 transition-all ${theme === 'system' ? 'border-black bg-gray-50' : 'border-gray-200'
+                          }`}
+                      >
                         <Smartphone className="w-6 h-6" />
                         <span className="text-sm font-medium">Sistema</span>
                       </button>
@@ -266,18 +345,17 @@ export default function Settings() {
                   <div>
                     <label className="block text-sm font-medium mb-3">Densidad de Información</label>
                     <div className="space-y-2">
-                      {['Compacta', 'Normal', 'Espaciada'].map((density, i) => (
-                        <label 
-                          key={density}
-                          className={`flex items-center justify-between p-4 border rounded-xl cursor-pointer ${
-                            i === 1 ? 'border-black bg-gray-50' : 'border-gray-200'
-                          }`}
+                      {['Compacta', 'Normal', 'Espaciada'].map((d) => (
+                        <label
+                          key={d}
+                          onClick={() => setDensity(d)}
+                          className={`flex items-center justify-between p-4 border rounded-xl cursor-pointer transition-all ${density === d ? 'border-black bg-gray-50 shadow-sm' : 'border-gray-200 hover:bg-gray-50/50'
+                            }`}
                         >
-                          <span className="font-medium">{density}</span>
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
-                            i === 1 ? 'border-black' : 'border-gray-300'
-                          }`}>
-                            {i === 1 && <div className="w-2.5 h-2.5 rounded-full bg-black" />}
+                          <span className="font-medium">{d}</span>
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${density === d ? 'border-black' : 'border-gray-300'
+                            }`}>
+                            {density === d && <div className="w-2.5 h-2.5 rounded-full bg-black" />}
                           </div>
                         </label>
                       ))}
@@ -291,34 +369,58 @@ export default function Settings() {
             {activeSection === 'privacy' && (
               <div className="p-6 lg:p-8">
                 <h2 className="text-xl font-semibold mb-6">Privacidad y Seguridad</h2>
-                
+
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                    <div>
-                      <p className="font-medium">Autenticación de Dos Factores</p>
-                      <p className="text-sm text-black/60">Añade una capa extra de seguridad</p>
+                    <div className="flex items-center gap-3">
+                      <Lock className="w-5 h-5 text-black/60" />
+                      <div>
+                        <p className="font-medium">Autenticación de Dos Factores</p>
+                        <p className="text-sm text-black/60">Añade una capa extra de seguridad</p>
+                      </div>
                     </div>
-                    <Button variant="outline" size="sm" className="rounded-full">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full"
+                      onClick={() => toast.info('Función de seguridad disponible para cuentas Premium')}
+                    >
                       Configurar
                     </Button>
                   </div>
 
                   <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                    <div>
-                      <p className="font-medium">Exportar Datos</p>
-                      <p className="text-sm text-black/60">Descarga todas tus cápsulas</p>
+                    <div className="flex items-center gap-3">
+                      <Download className="w-5 h-5 text-black/60" />
+                      <div>
+                        <p className="font-medium">Exportar Datos</p>
+                        <p className="text-sm text-black/60">Descarga todas tus cápsulas</p>
+                      </div>
                     </div>
-                    <Button variant="outline" size="sm" className="rounded-full">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full"
+                      onClick={handleExport}
+                    >
                       Exportar
                     </Button>
                   </div>
 
                   <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
-                    <div>
-                      <p className="font-medium">Eliminar Cuenta</p>
-                      <p className="text-sm text-black/60">Esta acción no se puede deshacer</p>
+                    <div className="flex items-center gap-3">
+                      <Trash2 className="w-5 h-5 text-red-500" />
+                      <div>
+                        <p className="font-medium">Eliminar Cuenta</p>
+                        <p className="text-sm text-black/60">Esta acción no se puede deshacer</p>
+                      </div>
                     </div>
-                    <Button variant="outline" size="sm" className="rounded-full text-red-600 hover:bg-red-50">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full text-red-600 hover:bg-red-50"
+                      onClick={() => toast.error('Acción no permitida en modo demo')}
+                    >
                       Eliminar
                     </Button>
                   </div>
