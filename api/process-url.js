@@ -184,13 +184,13 @@ export default async function handler(req, res) {
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-    // Use Gemini 2.0 Flash
+    // Use Gemini 3 Flash
     const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash',
+      model: 'gemini-3-flash-preview',
       generationConfig: {
-        temperature: 0.7,
-        topP: 0.9,
-        maxOutputTokens: 4096,
+        temperature: 1.0,
+        topP: 0.95,
+        maxOutputTokens: 8192,
       }
     });
 
@@ -242,7 +242,7 @@ Genera la Cápsula de Acción en JSON:`;
       source: url,
       sourceType,
       createdAt: new Date().toISOString(),
-      processedWith: 'gemini-2.0-flash'
+      processedWith: 'gemini-3-flash-preview'
     };
 
     res.status(200).json({ success: true, capsule });
