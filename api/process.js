@@ -1,11 +1,10 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import crypto from 'crypto';
 
-// Token verification (inline to avoid import issues in Vercel)
+// Token verification
 function verifyToken(token) {
   try {
     if (!token) return false;
-
     const validPassword = process.env.AUTH_PASSWORD;
     if (!validPassword) return false;
 
@@ -16,7 +15,6 @@ function verifyToken(token) {
     const tokenData = decoded.substring(0, lastColonIndex);
     const signature = decoded.substring(lastColonIndex + 1);
 
-    // Verify signature
     const expectedSignature = crypto
       .createHmac('sha256', validPassword)
       .update(tokenData)
@@ -24,7 +22,6 @@ function verifyToken(token) {
 
     if (signature !== expectedSignature) return false;
 
-    // Check expiry
     const { expiry } = JSON.parse(tokenData);
     if (Date.now() > expiry) return false;
 
@@ -34,20 +31,13 @@ function verifyToken(token) {
   }
 }
 
-const SYSTEM_PROMPT = `Eres un asistente experto en curación cognitiva y productividad personal. Tu tarea es analizar cualquier tipo de contenido (artículos, emails, mensajes, videos, documentos) y transformarlo en información accionable.
+const SYSTEM_INSTRUCTION = `Eres un asistente experto en curación cognitiva y productividad personal. Tu tarea es analizar contenido (texto, emails, mensajes, notas) y transformarlo en información accionable.
 
-INSTRUCCIONES:
-1. Lee y comprende profundamente el contenido
-2. Identifica los puntos clave y el propósito principal
-3. Detecta cualquier acción implícita o explícita requerida
-4. Evalúa la urgencia y el sentimiento del contenido
-5. Genera acciones específicas, medibles y ejecutables
-
-Para cada contenido, genera una "Cápsula de Acción" con esta estructura JSON exacta:
+Genera una "Cápsula de Acción" en formato JSON con esta estructura exacta:
 
 {
-  "title": "Título conciso que capture la esencia (max 80 caracteres)",
-  "summary": "Resumen ejecutivo de 2-4 oraciones que explique: qué es, por qué importa, y el contexto clave",
+  "title": "Título descriptivo que capture la esencia (max 80 caracteres)",
+  "summary": "Resumen ejecutivo de 2-4 oraciones: qué es, por qué importa, contexto clave",
   "actions": [
     "Acción 1: verbo + objeto + contexto específico",
     "Acción 2: verbo + objeto + contexto específico",
@@ -56,61 +46,48 @@ Para cada contenido, genera una "Cápsula de Acción" con esta estructura JSON e
   "priority": "high|medium|low",
   "sentiment": "positive|neutral|negative|urgent",
   "tags": ["tag1", "tag2", "tag3", "tag4"],
-  "readTime": <segundos estimados para procesar la cápsula>,
-  "keyInsights": ["Insight 1", "Insight 2"],
-  "deadline": "YYYY-MM-DD o null si no aplica"
+  "readTime": 30,
+  "keyInsights": ["Insight clave 1", "Insight clave 2"],
+  "deadline": "YYYY-MM-DD o null"
 }
 
 CRITERIOS DE PRIORIDAD:
-- HIGH: Acción requerida en 24-48h, impacto significativo, consecuencias de no actuar
-- MEDIUM: Importante pero flexible en timing, mejora o oportunidad
-- LOW: Informativo, referencia futura, nice-to-have
+- HIGH: Acción requerida en 24-48h, impacto significativo
+- MEDIUM: Importante pero flexible en timing
+- LOW: Informativo, referencia futura
 
 CRITERIOS DE SENTIMIENTO:
-- URGENT: Deadline explícito, palabras como "urgente", "inmediato", "crítico"
-- POSITIVE: Oportunidades, logros, buenas noticias, avances
-- NEGATIVE: Problemas, riesgos, alertas, quejas
-- NEUTRAL: Información objetiva, datos, actualizaciones rutinarias
+- URGENT: Deadline explícito, palabras como "urgente", "inmediato"
+- POSITIVE: Oportunidades, logros, buenas noticias
+- NEGATIVE: Problemas, riesgos, alertas
+- NEUTRAL: Información objetiva, datos
 
 ACCIONES EFECTIVAS:
-- Empiezan con verbo de acción: Revisar, Responder, Programar, Investigar, Contactar, Implementar
-- Son específicas: "Responder a Juan sobre propuesta de diseño" no "Responder email"
-- Tienen contexto: incluyen nombres, fechas, lugares cuando están disponibles
-- Son ejecutables: algo que puedes hacer en una sesión de trabajo
+- Empiezan con verbo: Revisar, Responder, Programar, Investigar, Contactar
+- Son específicas: "Responder a Juan sobre la propuesta" no "Responder email"
+- Incluyen contexto: nombres, fechas, lugares cuando están disponibles
 
-IMPORTANTE:
-- Responde SOLO con JSON válido, sin markdown ni texto adicional
-- Genera entre 3-5 acciones relevantes
-- Los tags deben ser útiles para filtrar y buscar`;
+IMPORTANTE: Responde SOLO con JSON válido.`;
 
 function generateId() {
   return `cap_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
 export default async function handler(req, res) {
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' });
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
-  }
-
-  // Verify authentication
   const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!verifyToken(token)) {
-    return res.status(401).json({ success: false, error: 'Unauthorized' });
-  }
+  if (!verifyToken(token)) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
   try {
     const { content, sourceType = 'text', source = 'Manual' } = req.body;
 
-    if (!content || content.trim().length === 0) {
+    if (!content?.trim()) {
       return res.status(400).json({ success: false, error: 'Content is required' });
     }
 
@@ -120,31 +97,31 @@ export default async function handler(req, res) {
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 
-    // Use Gemini 3 Flash
+    // Use Gemini 3 Flash with system instruction and structured output
     const model = genAI.getGenerativeModel({
       model: 'gemini-3-flash-preview',
+      systemInstruction: SYSTEM_INSTRUCTION,
       generationConfig: {
-        temperature: 1.0,
+        temperature: 0.7,
         topP: 0.95,
         maxOutputTokens: 8192,
+        responseMimeType: 'application/json'
       }
     });
 
-    const prompt = `${SYSTEM_PROMPT}
+    const prompt = `Analiza el siguiente contenido y genera una Cápsula de Acción.
 
-=== CONTENIDO A ANALIZAR ===
-Tipo: ${sourceType}
+Tipo de contenido: ${sourceType}
 Fuente: ${source}
-Fecha de análisis: ${new Date().toISOString()}
+Fecha: ${new Date().toLocaleDateString('es-ES')}
 
+CONTENIDO:
 ${content}
-
-=== FIN DEL CONTENIDO ===
 
 Genera la Cápsula de Acción en JSON:`;
 
     const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      contents: [{ role: 'user', parts: [{ text: prompt }] }]
     });
 
     const response = await result.response;
@@ -157,14 +134,14 @@ Genera la Cápsula de Acción en JSON:`;
     try {
       capsuleData = JSON.parse(text);
     } catch (parseError) {
-      console.error('Failed to parse Gemini response:', text);
-      return res.status(500).json({ success: false, error: 'Invalid response from AI', rawResponse: text });
+      console.error('Parse error:', text);
+      return res.status(500).json({ success: false, error: 'Invalid AI response', rawResponse: text });
     }
 
     const capsule = {
       id: generateId(),
-      title: capsuleData.title,
-      summary: capsuleData.summary,
+      title: capsuleData.title || 'Sin título',
+      summary: capsuleData.summary || '',
       actions: capsuleData.actions || [],
       priority: capsuleData.priority || 'medium',
       sentiment: capsuleData.sentiment || 'neutral',

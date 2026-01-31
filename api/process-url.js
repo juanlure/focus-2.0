@@ -5,7 +5,6 @@ import crypto from 'crypto';
 function verifyToken(token) {
   try {
     if (!token) return false;
-
     const validPassword = process.env.AUTH_PASSWORD;
     if (!validPassword) return false;
 
@@ -16,7 +15,6 @@ function verifyToken(token) {
     const tokenData = decoded.substring(0, lastColonIndex);
     const signature = decoded.substring(lastColonIndex + 1);
 
-    // Verify signature
     const expectedSignature = crypto
       .createHmac('sha256', validPassword)
       .update(tokenData)
@@ -24,7 +22,6 @@ function verifyToken(token) {
 
     if (signature !== expectedSignature) return false;
 
-    // Check expiry
     const { expiry } = JSON.parse(tokenData);
     if (Date.now() > expiry) return false;
 
@@ -34,184 +31,162 @@ function verifyToken(token) {
   }
 }
 
-const SYSTEM_PROMPT = `Eres un asistente experto en curación cognitiva y productividad personal. Tu tarea es analizar cualquier tipo de contenido (artículos, emails, mensajes, videos, documentos) y transformarlo en información accionable.
+const SYSTEM_INSTRUCTION = `Eres un asistente experto en curación cognitiva. Tu tarea es analizar contenido multimedia (videos, artículos, páginas web) y transformarlo en información accionable.
 
-INSTRUCCIONES:
-1. Lee y comprende profundamente el contenido
-2. Identifica los puntos clave y el propósito principal
-3. Detecta cualquier acción implícita o explícita requerida
-4. Evalúa la urgencia y el sentimiento del contenido
-5. Genera acciones específicas, medibles y ejecutables
+IMPORTANTE: Analiza el contenido REAL que se te proporciona. Para videos de YouTube, analiza el contenido visual y de audio del video. NO inventes información.
 
-Para cada contenido, genera una "Cápsula de Acción" con esta estructura JSON exacta:
+Genera una "Cápsula de Acción" en JSON con esta estructura exacta:
 
 {
-  "title": "Título conciso que capture la esencia (max 80 caracteres)",
-  "summary": "Resumen ejecutivo de 2-4 oraciones que explique: qué es, por qué importa, y el contexto clave",
-  "actions": [
-    "Acción 1: verbo + objeto + contexto específico",
-    "Acción 2: verbo + objeto + contexto específico",
-    "Acción 3: verbo + objeto + contexto específico"
-  ],
+  "title": "Título descriptivo del contenido (max 80 caracteres)",
+  "summary": "Resumen de 2-4 oraciones sobre el contenido real del video/artículo",
+  "actions": ["Acción específica 1", "Acción específica 2", "Acción específica 3"],
   "priority": "high|medium|low",
   "sentiment": "positive|neutral|negative|urgent",
-  "tags": ["tag1", "tag2", "tag3", "tag4"],
-  "readTime": <segundos estimados para procesar la cápsula>,
-  "keyInsights": ["Insight 1", "Insight 2"],
-  "deadline": "YYYY-MM-DD o null si no aplica"
+  "tags": ["tag1", "tag2", "tag3"],
+  "readTime": 30,
+  "keyInsights": ["Insight clave 1", "Insight clave 2"],
+  "deadline": null
 }
 
-CRITERIOS DE PRIORIDAD:
-- HIGH: Acción requerida en 24-48h, impacto significativo, consecuencias de no actuar
-- MEDIUM: Importante pero flexible en timing, mejora o oportunidad
-- LOW: Informativo, referencia futura, nice-to-have
-
-CRITERIOS DE SENTIMIENTO:
-- URGENT: Deadline explícito, palabras como "urgente", "inmediato", "crítico"
-- POSITIVE: Oportunidades, logros, buenas noticias, avances
-- NEGATIVE: Problemas, riesgos, alertas, quejas
-- NEUTRAL: Información objetiva, datos, actualizaciones rutinarias
-
-ACCIONES EFECTIVAS:
-- Empiezan con verbo de acción: Revisar, Responder, Programar, Investigar, Contactar, Implementar
-- Son específicas: "Responder a Juan sobre propuesta de diseño" no "Responder email"
-- Tienen contexto: incluyen nombres, fechas, lugares cuando están disponibles
-- Son ejecutables: algo que puedes hacer en una sesión de trabajo
-
-IMPORTANTE:
-- Responde SOLO con JSON válido, sin markdown ni texto adicional
-- Genera entre 3-5 acciones relevantes
-- Los tags deben ser útiles para filtrar y buscar`;
+REGLAS:
+- HIGH priority: Requiere acción inmediata
+- MEDIUM priority: Importante pero no urgente
+- LOW priority: Informativo, referencia futura
+- Las acciones deben ser específicas y ejecutables
+- Responde SOLO con JSON válido, sin markdown`;
 
 function generateId() {
   return `cap_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
 
-async function fetchUrlContent(url) {
+function extractYouTubeVideoId(url) {
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([^&\n?#]+)/,
+    /youtube\.com\/shorts\/([^&\n?#]+)/
+  ];
+
+  for (const pattern of patterns) {
+    const match = url.match(pattern);
+    if (match) return match[1];
+  }
+  return null;
+}
+
+async function fetchWebContent(url) {
   const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; FocusBrief/1.0)'
-    }
+    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; FocusBrief/1.0)' }
   });
 
-  if (!response.ok) {
-    throw new Error(`Failed to fetch URL: ${response.status}`);
-  }
+  if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
 
   const html = await response.text();
-
-  // Extract title
   const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-  const title = titleMatch ? titleMatch[1].trim() : '';
-
-  // Extract meta description
   const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
-  const description = descMatch ? descMatch[1].trim() : '';
 
-  // Basic HTML to text conversion
   let text = html
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-    .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
-    .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
-    .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
     .replace(/<[^>]+>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
-  // Limit content length for optimal processing
-  if (text.length > 15000) {
-    text = text.substring(0, 15000) + '...';
-  }
+  if (text.length > 15000) text = text.substring(0, 15000) + '...';
 
-  return { text, title, description };
+  return {
+    title: titleMatch ? titleMatch[1].trim() : '',
+    description: descMatch ? descMatch[1].trim() : '',
+    text
+  };
 }
 
 export default async function handler(req, res) {
-  // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
+  if (req.method === 'OPTIONS') return res.status(200).end();
+  if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' });
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
-  }
-
-  // Verify authentication
   const token = req.headers.authorization?.replace('Bearer ', '');
-  if (!verifyToken(token)) {
-    return res.status(401).json({ success: false, error: 'Unauthorized' });
-  }
+  if (!verifyToken(token)) return res.status(401).json({ success: false, error: 'Unauthorized' });
 
   try {
     const { url } = req.body;
-
-    if (!url || !url.trim()) {
-      return res.status(400).json({ success: false, error: 'URL is required' });
-    }
-
-    if (!process.env.GEMINI_API_KEY) {
-      return res.status(500).json({ success: false, error: 'API key not configured' });
-    }
-
-    // Determine source type
-    let sourceType = 'article';
-    if (url.includes('youtube.com') || url.includes('youtu.be')) {
-      sourceType = 'youtube';
-    } else if (url.includes('twitter.com') || url.includes('x.com')) {
-      sourceType = 'twitter';
-    } else if (url.includes('linkedin.com')) {
-      sourceType = 'linkedin';
-    } else if (url.includes('github.com')) {
-      sourceType = 'github';
-    } else if (url.endsWith('.pdf')) {
-      sourceType = 'pdf';
-    }
-
-    // Fetch content from URL
-    const { text: content, title: pageTitle, description: pageDesc } = await fetchUrlContent(url);
-
-    if (!content || content.length < 100) {
-      return res.status(400).json({
-        success: false,
-        error: 'Could not extract enough content from URL'
-      });
-    }
+    if (!url?.trim()) return res.status(400).json({ success: false, error: 'URL is required' });
+    if (!process.env.GEMINI_API_KEY) return res.status(500).json({ success: false, error: 'API key not configured' });
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+    const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+    const videoId = isYouTube ? extractYouTubeVideoId(url) : null;
 
-    // Use Gemini 3 Flash
+    let sourceType = 'article';
+    let contentParts = [];
+    let contextInfo = '';
+
+    if (isYouTube && videoId) {
+      sourceType = 'youtube';
+
+      // Use Gemini's native YouTube video processing
+      // Gemini 3 Flash can process YouTube URLs directly
+      contentParts = [
+        {
+          fileData: {
+            mimeType: 'video/mp4',
+            fileUri: `https://www.youtube.com/watch?v=${videoId}`
+          }
+        },
+        {
+          text: `Analiza este video de YouTube y genera una Cápsula de Acción.
+
+URL del video: ${url}
+
+INSTRUCCIONES:
+1. Mira y escucha el contenido COMPLETO del video
+2. Identifica los temas principales discutidos
+3. Extrae las ideas y conceptos clave
+4. Genera acciones concretas basadas en el contenido
+5. NO inventes información - basa todo en el contenido real del video
+
+Responde SOLO con el JSON de la Cápsula de Acción.`
+        }
+      ];
+    } else {
+      // For regular web pages
+      const webContent = await fetchWebContent(url);
+
+      if (url.includes('twitter.com') || url.includes('x.com')) sourceType = 'twitter';
+      else if (url.includes('linkedin.com')) sourceType = 'linkedin';
+      else if (url.includes('github.com')) sourceType = 'github';
+
+      contentParts = [{
+        text: `Analiza este contenido web y genera una Cápsula de Acción.
+
+URL: ${url}
+Título: ${webContent.title}
+Descripción: ${webContent.description}
+
+Contenido:
+${webContent.text}
+
+Responde SOLO con el JSON de la Cápsula de Acción.`
+      }];
+    }
+
+    // Use Gemini 3 Flash with system instruction
     const model = genAI.getGenerativeModel({
       model: 'gemini-3-flash-preview',
+      systemInstruction: SYSTEM_INSTRUCTION,
       generationConfig: {
-        temperature: 1.0,
+        temperature: 0.7,
         topP: 0.95,
         maxOutputTokens: 8192,
+        responseMimeType: 'application/json'
       }
     });
 
-    const prompt = `${SYSTEM_PROMPT}
-
-=== CONTENIDO WEB A ANALIZAR ===
-URL: ${url}
-Tipo: ${sourceType}
-Título de página: ${pageTitle || 'No disponible'}
-Meta descripción: ${pageDesc || 'No disponible'}
-Fecha de análisis: ${new Date().toISOString()}
-
-CONTENIDO EXTRAÍDO:
-${content}
-
-=== FIN DEL CONTENIDO ===
-
-Genera la Cápsula de Acción en JSON:`;
-
     const result = await model.generateContent({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      contents: [{ role: 'user', parts: contentParts }]
     });
 
     const response = await result.response;
@@ -224,14 +199,14 @@ Genera la Cápsula de Acción en JSON:`;
     try {
       capsuleData = JSON.parse(text);
     } catch (parseError) {
-      console.error('Failed to parse Gemini response:', text);
-      return res.status(500).json({ success: false, error: 'Invalid response from AI', rawResponse: text });
+      console.error('Parse error:', text);
+      return res.status(500).json({ success: false, error: 'Invalid AI response', rawResponse: text });
     }
 
     const capsule = {
       id: generateId(),
-      title: capsuleData.title || pageTitle,
-      summary: capsuleData.summary,
+      title: capsuleData.title || 'Sin título',
+      summary: capsuleData.summary || '',
       actions: capsuleData.actions || [],
       priority: capsuleData.priority || 'medium',
       sentiment: capsuleData.sentiment || 'neutral',
