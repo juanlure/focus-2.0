@@ -118,11 +118,11 @@ export default async function handler(req, res) {
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
     const isYouTube = url.includes('youtube.com') || url.includes('youtu.be');
+    const isTwitter = url.includes('twitter.com') || url.includes('x.com');
     const videoId = isYouTube ? extractYouTubeVideoId(url) : null;
 
     let sourceType = 'article';
     let contentParts = [];
-    let contextInfo = '';
 
     if (isYouTube && videoId) {
       sourceType = 'youtube';
@@ -151,6 +151,29 @@ INSTRUCCIONES:
 Responde SOLO con el JSON de la Cápsula de Acción.`
         }
       ];
+    } else if (isTwitter) {
+      sourceType = 'twitter';
+      const tweetId = url.match(/(?:twitter\.com|x\.com)\/\w+\/status\/(\d+)/)?.[1];
+
+      let tweetContent = `URL: ${url}`;
+      if (tweetId) {
+        try {
+          const response = await fetch(`https://api.fxtwitter.com/status/${tweetId}`, {
+            headers: { 'User-Agent': 'FocusBrief/1.0' }
+          });
+          if (response.ok) {
+            const data = await response.json();
+            const tweet = data.tweet;
+            tweetContent = `TIPO: TWEET DE X/TWITTER\nAUTOR: ${tweet.author.name} (@${tweet.author.screen_name})\nCONTENIDO:\n\n${tweet.text}\n\nMETADATOS: ${tweet.likes} Likes, ${tweet.retweets} Retweets`;
+          }
+        } catch (e) {
+          console.warn('Fxtwitter fallback failed');
+        }
+      }
+
+      contentParts = [{
+        text: `Analiza este Tweet y genera una Cápsula de Acción.\n\n${tweetContent}`
+      }];
     } else {
       // For regular web pages
       const webContent = await fetchWebContent(url);
