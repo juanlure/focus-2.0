@@ -75,28 +75,25 @@ function extractYouTubeVideoId(url) {
 
 async function fetchWebContent(url) {
   const response = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (compatible; FocusBrief/1.0)' }
+    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' }
   });
 
   if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
 
   const html = await response.text();
-  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
-  const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
 
-  let text = html
+  // Basic fallback if readability is not available or fails
+  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+  const text = html
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
     .replace(/<[^>]+>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
-  if (text.length > 15000) text = text.substring(0, 15000) + '...';
-
   return {
     title: titleMatch ? titleMatch[1].trim() : '',
-    description: descMatch ? descMatch[1].trim() : '',
-    text
+    text: text.substring(0, 15000)
   };
 }
 
@@ -172,7 +169,13 @@ Responde SOLO con el JSON de la Cápsula de Acción.`
       }
 
       contentParts = [{
-        text: `Analiza este Tweet y genera una Cápsula de Acción.\n\n${tweetContent}`
+        text: `Analiza este Tweet y genera una Cápsula de Acción.
+        
+IMPORTANTE: Si el Tweet contiene imágenes o videos, fxtwitter nos proporciona el texto y metadatos.
+
+${tweetContent}
+
+Responde SOLO con el JSON de la Cápsula de Acción.`
       }];
     } else {
       // For regular web pages
