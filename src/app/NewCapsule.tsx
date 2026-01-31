@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import gsap from 'gsap';
-import { 
-  Link2, 
-  FileText, 
-  MessageSquare, 
-  Mail,
+import {
+  Link2,
+  FileText,
+  Image,
+  Music,
   Video,
+  File,
   Sparkles,
   Loader2,
   CheckCircle2,
@@ -22,14 +23,12 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { processContent, processURL } from '@/services/api';
+import { processContent, processURL, processFile, getAllSupportedExtensions } from '@/services/api';
 
 const inputMethods = [
-  { id: 'link', label: 'Link', icon: Link2, placeholder: 'https://ejemplo.com/articulo' },
-  { id: 'text', label: 'Texto', icon: FileText, placeholder: 'Pega o escribe el contenido...' },
-  { id: 'video', label: 'Video', icon: Video, placeholder: 'Sube un video o pega URL de YouTube' },
-  { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare, placeholder: 'Escribe o pega el mensaje...' },
-  { id: 'email', label: 'Email', icon: Mail, placeholder: 'Pega el contenido del email...' },
+  { id: 'link', label: 'Link', icon: Link2, description: 'YouTube, artículos, webs' },
+  { id: 'text', label: 'Texto', icon: FileText, description: 'Pega cualquier texto' },
+  { id: 'file', label: 'Archivo', icon: Upload, description: 'Imagen, Audio, Video, PDF' },
 ];
 
 interface ProcessResult {
@@ -44,14 +43,17 @@ interface ProcessResult {
   source: string;
   sourceType: string;
   createdAt: string;
+  keyInsights?: string[];
+  extractedText?: string | null;
+  mediaAnalysis?: string | null;
 }
 
 export default function NewCapsule() {
   const navigate = useNavigate();
   const [inputMethod, setInputMethod] = useState('link');
   const [inputValue, setInputValue] = useState('');
-  const [videoFile, setVideoFile] = useState<File | null>(null);
-  const [videoPreview, setVideoPreview] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [filePreview, setFilePreview] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [result, setResult] = useState<ProcessResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -73,58 +75,69 @@ export default function NewCapsule() {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 50 * 1024 * 1024) {
-        setError('El video no debe superar los 50MB');
+        setError('El archivo no debe superar los 50MB');
         return;
       }
-      setVideoFile(file);
-      setVideoPreview(URL.createObjectURL(file));
+      setSelectedFile(file);
       setError(null);
+
+      // Create preview for images and videos
+      if (file.type.startsWith('image/')) {
+        setFilePreview(URL.createObjectURL(file));
+      } else if (file.type.startsWith('video/')) {
+        setFilePreview(URL.createObjectURL(file));
+      } else {
+        setFilePreview(null);
+      }
     }
   };
 
-  const clearVideo = () => {
-    setVideoFile(null);
-    setVideoPreview(null);
+  const clearFile = () => {
+    setSelectedFile(null);
+    setFilePreview(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
   };
 
+  const getFileIcon = (file: File) => {
+    if (file.type.startsWith('image/')) return Image;
+    if (file.type.startsWith('audio/')) return Music;
+    if (file.type.startsWith('video/')) return Video;
+    if (file.type === 'application/pdf') return File;
+    return FileText;
+  };
+
   const handleProcess = async () => {
     setError(null);
-    
-    // Validate input
-    if (inputMethod === 'video') {
-      if (!videoFile && !inputValue.trim()) {
-        setError('Sube un video o pega una URL de YouTube');
+
+    // Validate input based on method
+    if (inputMethod === 'file') {
+      if (!selectedFile) {
+        setError('Selecciona un archivo para procesar');
+        return;
+      }
+    } else if (inputMethod === 'link') {
+      if (!inputValue.trim()) {
+        setError('Ingresa una URL para procesar');
         return;
       }
     } else if (!inputValue.trim()) {
       setError('Ingresa el contenido a procesar');
       return;
     }
-    
+
     setIsProcessing(true);
-    
+
     try {
       let response;
-      
-      if (inputMethod === 'video' && videoFile) {
-        // Process uploaded video as text for now (video processing needs special handling)
-        setError('Procesamiento de video directo no disponible en esta versión. Usa una URL de YouTube.');
-        setIsProcessing(false);
-        return;
-      } else if (inputMethod === 'video' && inputValue.trim()) {
-        // Process YouTube URL
-        response = await processURL(inputValue);
+
+      if (inputMethod === 'file' && selectedFile) {
+        response = await processFile(selectedFile);
       } else if (inputMethod === 'link') {
         response = await processURL(inputValue);
       } else {
-        response = await processContent(
-          inputValue,
-          inputMethod,
-          inputMethod === 'whatsapp' ? 'WhatsApp' : inputMethod === 'email' ? 'Email' : 'Manual'
-        );
+        response = await processContent(inputValue, inputMethod, 'Manual');
       }
 
       if (response.success && response.capsule) {
@@ -144,43 +157,25 @@ export default function NewCapsule() {
   };
 
   const copyToClipboard = () => {
-    navigator.clipboard.writeText(inputValue);
+    const text = result ? `${result.title}\n\n${result.summary}\n\nAcciones:\n${result.actions.map((a, i) => `${i + 1}. ${a}`).join('\n')}` : '';
+    navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const SelectedIcon = inputMethods.find(m => m.id === inputMethod)?.icon || Link2;
-
-  const priorityLabels = {
-    high: 'Alta',
-    medium: 'Media',
-    low: 'Baja',
-  };
-
-  const priorityColors = {
-    high: 'bg-red-500',
-    medium: 'bg-yellow-500',
-    low: 'bg-green-500',
-  };
-
-  const sentimentLabels = {
-    positive: 'Positivo',
-    neutral: 'Neutral',
-    negative: 'Negativo',
-    urgent: 'Urgente',
-  };
+  const priorityLabels = { high: 'Alta', medium: 'Media', low: 'Baja' };
+  const priorityColors = { high: 'bg-red-500', medium: 'bg-yellow-500', low: 'bg-green-500' };
+  const sentimentLabels = { positive: 'Positivo', neutral: 'Neutral', negative: 'Negativo', urgent: 'Urgente' };
 
   return (
     <div ref={contentRef} className="max-w-3xl mx-auto">
-      {/* Page Title */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">Nueva Cápsula</h1>
-        <p className="text-black/60">Agrega contenido para procesar con Gemini 3 Flash</p>
+        <p className="text-black/60">Procesa cualquier contenido con Gemini 3 Flash</p>
       </div>
 
       {!result ? (
         <div className="bg-white rounded-3xl border border-gray-100 p-6 lg:p-8">
-          {/* Error Alert */}
           {error && (
             <Alert variant="destructive" className="mb-6">
               <AlertCircle className="h-4 w-4" />
@@ -188,142 +183,146 @@ export default function NewCapsule() {
             </Alert>
           )}
 
-          {/* Input Method Tabs */}
           <Tabs value={inputMethod} onValueChange={(v) => {
             setInputMethod(v);
             setInputValue('');
-            clearVideo();
+            clearFile();
             setError(null);
           }} className="mb-6">
-            <TabsList className="grid grid-cols-5 bg-gray-100 p-1 rounded-xl">
+            <TabsList className="grid grid-cols-3 bg-gray-100 p-1 rounded-xl">
               {inputMethods.map((method) => (
-                <TabsTrigger 
-                  key={method.id} 
+                <TabsTrigger
+                  key={method.id}
                   value={method.id}
-                  className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm text-xs sm:text-sm"
+                  className="rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm"
                 >
-                  <method.icon className="w-4 h-4 mr-1 sm:mr-2" />
-                  <span className="hidden sm:inline">{method.label}</span>
+                  <method.icon className="w-4 h-4 mr-2" />
+                  {method.label}
                 </TabsTrigger>
               ))}
             </TabsList>
 
             {/* Link Input */}
-            <TabsContent value="link" className="mt-0">
-              <div className="relative">
-                <Link2 className="absolute left-4 top-4 w-5 h-5 text-black/40" />
-                <Input
-                  placeholder="https://ejemplo.com/articulo"
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  className="pl-12 h-14 border-gray-200 rounded-xl focus-visible:ring-1"
-                />
-              </div>
-            </TabsContent>
-
-            {/* Text Input */}
-            <TabsContent value="text" className="mt-0">
-              <div className="relative">
-                <FileText className="absolute left-4 top-4 w-5 h-5 text-black/40" />
-                <Textarea
-                  placeholder="Pega o escribe el contenido..."
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  className="pl-12 min-h-[200px] resize-none border-gray-200 rounded-xl focus-visible:ring-1"
-                />
-              </div>
-            </TabsContent>
-
-            {/* Video Input */}
-            <TabsContent value="video" className="mt-0">
+            <TabsContent value="link" className="mt-6">
               <div className="space-y-4">
-                {/* YouTube URL */}
                 <div className="relative">
                   <Link2 className="absolute left-4 top-4 w-5 h-5 text-black/40" />
                   <Input
-                    placeholder="URL de YouTube (opcional si subes video)"
+                    placeholder="https://youtube.com/watch?v=... o cualquier URL"
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
                     className="pl-12 h-14 border-gray-200 rounded-xl focus-visible:ring-1"
                   />
                 </div>
+                <div className="flex flex-wrap gap-2 text-xs text-black/50">
+                  <span className="px-2 py-1 bg-gray-100 rounded">YouTube</span>
+                  <span className="px-2 py-1 bg-gray-100 rounded">Artículos</span>
+                  <span className="px-2 py-1 bg-gray-100 rounded">Twitter/X</span>
+                  <span className="px-2 py-1 bg-gray-100 rounded">LinkedIn</span>
+                  <span className="px-2 py-1 bg-gray-100 rounded">GitHub</span>
+                </div>
+              </div>
+            </TabsContent>
 
-                <div className="text-center text-sm text-black/40">o</div>
-
-                {/* File Upload */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="video/*"
-                  onChange={handleFileSelect}
-                  className="hidden"
+            {/* Text Input */}
+            <TabsContent value="text" className="mt-6">
+              <div className="relative">
+                <FileText className="absolute left-4 top-4 w-5 h-5 text-black/40" />
+                <Textarea
+                  placeholder="Pega o escribe el contenido a analizar..."
+                  value={inputValue}
+                  onChange={(e) => setInputValue(e.target.value)}
+                  className="pl-12 min-h-[200px] resize-none border-gray-200 rounded-xl focus-visible:ring-1"
                 />
-                
-                {!videoFile ? (
-                  <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className="w-full h-32 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-2 hover:border-black/30 hover:bg-gray-50 transition-colors"
-                  >
+              </div>
+            </TabsContent>
+
+            {/* File Upload */}
+            <TabsContent value="file" className="mt-6">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={getAllSupportedExtensions()}
+                onChange={handleFileSelect}
+                className="hidden"
+              />
+
+              {!selectedFile ? (
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full h-48 border-2 border-dashed border-gray-200 rounded-xl flex flex-col items-center justify-center gap-3 hover:border-black/30 hover:bg-gray-50 transition-colors"
+                >
+                  <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center">
                     <Upload className="w-8 h-8 text-black/40" />
-                    <span className="text-sm text-black/60">Haz clic para subir un video</span>
-                    <span className="text-xs text-black/40">MP4, WebM, MOV (max 50MB)</span>
+                  </div>
+                  <div className="text-center">
+                    <span className="text-sm font-medium text-black/70">Haz clic para subir</span>
+                    <p className="text-xs text-black/40 mt-1">o arrastra y suelta</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 justify-center text-xs text-black/40 mt-2">
+                    <span className="flex items-center gap-1"><Image className="w-3 h-3" /> Imágenes</span>
+                    <span className="flex items-center gap-1"><Music className="w-3 h-3" /> Audio</span>
+                    <span className="flex items-center gap-1"><Video className="w-3 h-3" /> Video</span>
+                    <span className="flex items-center gap-1"><File className="w-3 h-3" /> PDF</span>
+                  </div>
+                </button>
+              ) : (
+                <div className="relative bg-gray-50 rounded-xl p-4">
+                  <button
+                    onClick={clearFile}
+                    className="absolute top-2 right-2 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-sm hover:bg-gray-100 z-10"
+                  >
+                    <X className="w-4 h-4" />
                   </button>
-                ) : (
-                  <div className="relative bg-gray-50 rounded-xl p-4">
-                    <button
-                      onClick={clearVideo}
-                      className="absolute top-2 right-2 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-sm hover:bg-gray-100"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
+
+                  {/* Preview */}
+                  {filePreview && selectedFile.type.startsWith('image/') && (
+                    <img
+                      src={filePreview}
+                      alt="Preview"
+                      className="w-full max-h-48 object-contain rounded-lg mb-3"
+                    />
+                  )}
+                  {filePreview && selectedFile.type.startsWith('video/') && (
                     <video
-                      src={videoPreview || undefined}
-                      className="w-full max-h-48 rounded-lg"
+                      src={filePreview}
+                      className="w-full max-h-48 rounded-lg mb-3"
                       controls
                     />
-                    <p className="mt-2 text-sm text-black/60 truncate">{videoFile.name}</p>
+                  )}
+
+                  {/* File info */}
+                  <div className="flex items-center gap-3">
+                    {(() => {
+                      const FileIcon = getFileIcon(selectedFile);
+                      return <FileIcon className="w-8 h-8 text-black/60" />;
+                    })()}
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{selectedFile.name}</p>
+                      <p className="text-xs text-black/50">
+                        {(selectedFile.size / 1024 / 1024).toFixed(2)} MB • {selectedFile.type}
+                      </p>
+                    </div>
                   </div>
-                )}
-              </div>
-            </TabsContent>
+                </div>
+              )}
 
-            {/* WhatsApp Input */}
-            <TabsContent value="whatsapp" className="mt-0">
-              <div className="relative">
-                <MessageSquare className="absolute left-4 top-4 w-5 h-5 text-black/40" />
-                <Textarea
-                  placeholder="Escribe o pega el mensaje..."
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  className="pl-12 min-h-[200px] resize-none border-gray-200 rounded-xl focus-visible:ring-1"
-                />
-              </div>
-            </TabsContent>
-
-            {/* Email Input */}
-            <TabsContent value="email" className="mt-0">
-              <div className="relative">
-                <Mail className="absolute left-4 top-4 w-5 h-5 text-black/40" />
-                <Textarea
-                  placeholder="Pega el contenido del email..."
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  className="pl-12 min-h-[200px] resize-none border-gray-200 rounded-xl focus-visible:ring-1"
-                />
-              </div>
+              <p className="text-xs text-black/40 mt-3 text-center">
+                Máximo 50MB • Imágenes, Audio (hasta 8h), Video (hasta 45min), PDF (hasta 900 páginas)
+              </p>
             </TabsContent>
           </Tabs>
 
-          {/* Quick Tips */}
-          <div className="bg-gray-50 rounded-xl p-4 mb-6">
+          {/* Gemini Info */}
+          <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 mb-6">
             <div className="flex items-center gap-2 mb-2">
-              <Sparkles className="w-4 h-4 text-black" />
-              <span className="font-medium text-sm">Gemini 3 Flash</span>
+              <Sparkles className="w-4 h-4 text-purple-600" />
+              <span className="font-medium text-sm text-purple-800">Gemini 3 Flash</span>
             </div>
-            <ul className="text-sm text-black/60 space-y-1">
-              <li>• Soporta texto, imágenes, videos, audio y PDFs</li>
-              <li>• Hasta 1M tokens de entrada y 65K de salida</li>
-              <li>• Procesamiento en ~30 segundos</li>
+            <ul className="text-sm text-purple-700/80 space-y-1">
+              <li>• Analiza texto, imágenes, audio, video y PDFs</li>
+              <li>• Hasta 1M tokens de entrada</li>
+              <li>• Procesamiento multimodal nativo</li>
             </ul>
           </div>
 
@@ -349,40 +348,29 @@ export default function NewCapsule() {
       ) : (
         /* Result View */
         <div className="space-y-6">
-          {/* Success Banner */}
           <div className="bg-green-50 border border-green-200 rounded-2xl p-4 flex items-center gap-3">
             <CheckCircle2 className="w-6 h-6 text-green-600" />
             <div>
               <p className="font-medium text-green-800">¡Cápsula creada con Gemini 3 Flash!</p>
-              <p className="text-sm text-green-600">Procesado en {result.readTime} segundos</p>
+              <p className="text-sm text-green-600">Procesado desde {result.sourceType}</p>
             </div>
           </div>
 
-          {/* Result Card */}
           <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden">
-            {/* Header */}
             <div className="p-6 lg:p-8 border-b border-gray-100">
               <div className="flex items-center gap-2 mb-4">
                 <div className={`w-2 h-2 rounded-full ${priorityColors[result.priority]}`} />
-                <Badge variant="outline" className="text-green-600 bg-green-50 border-green-200 capitalize">
+                <Badge variant="outline" className="capitalize">
                   {sentimentLabels[result.sentiment]}
                 </Badge>
                 <Badge variant="secondary">
                   Prioridad {priorityLabels[result.priority]}
                 </Badge>
               </div>
-
               <h2 className="text-2xl font-bold mb-2">{result.title}</h2>
-              
-              <div className="flex items-center gap-2 text-sm text-black/60">
-                <SelectedIcon className="w-4 h-4" />
-                <span>Procesado desde {inputMethod === 'video' && videoFile ? videoFile.name : inputMethod}</span>
-              </div>
             </div>
 
-            {/* Content */}
             <div className="p-6 lg:p-8">
-              {/* Summary */}
               <div className="mb-6">
                 <div className="flex items-center gap-2 mb-3">
                   <Sparkles className="w-5 h-5 text-black" />
@@ -391,7 +379,20 @@ export default function NewCapsule() {
                 <p className="text-black/70 leading-relaxed">{result.summary}</p>
               </div>
 
-              {/* Actions */}
+              {result.keyInsights && result.keyInsights.length > 0 && (
+                <div className="mb-6">
+                  <h3 className="font-semibold mb-3">Insights Clave</h3>
+                  <ul className="space-y-2">
+                    {result.keyInsights.map((insight, i) => (
+                      <li key={i} className="flex items-start gap-2 text-black/70">
+                        <span className="text-purple-600">•</span>
+                        {insight}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div>
                 <div className="flex items-center gap-2 mb-3">
                   <CheckCircle2 className="w-5 h-5 text-black" />
@@ -399,10 +400,7 @@ export default function NewCapsule() {
                 </div>
                 <div className="space-y-2">
                   {result.actions.map((action, index) => (
-                    <div 
-                      key={index}
-                      className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl"
-                    >
+                    <div key={index} className="flex items-start gap-3 p-3 bg-gray-50 rounded-xl">
                       <span className="w-6 h-6 rounded-full bg-black text-white text-xs flex items-center justify-center flex-shrink-0 mt-0.5">
                         {index + 1}
                       </span>
@@ -412,52 +410,42 @@ export default function NewCapsule() {
                 </div>
               </div>
 
-              {/* Tags */}
-              <div className="mt-6">
-                <div className="flex flex-wrap gap-2">
-                  {result.tags.map((tag, index) => (
-                    <Badge key={index} variant="secondary">{tag}</Badge>
-                  ))}
+              {result.mediaAnalysis && (
+                <div className="mt-6 p-4 bg-blue-50 rounded-xl">
+                  <h4 className="font-medium text-blue-800 mb-2">Análisis del contenido</h4>
+                  <p className="text-sm text-blue-700">{result.mediaAnalysis}</p>
                 </div>
+              )}
+
+              <div className="mt-6 flex flex-wrap gap-2">
+                {result.tags.map((tag, index) => (
+                  <Badge key={index} variant="secondary">{tag}</Badge>
+                ))}
               </div>
             </div>
 
-            {/* Footer Actions */}
             <div className="p-6 lg:p-8 border-t border-gray-100 bg-gray-50">
               <div className="flex flex-wrap gap-3">
-                <Button 
-                  onClick={handleSave}
-                  className="bg-black text-white hover:bg-black/90 rounded-full"
-                >
+                <Button onClick={handleSave} className="bg-black text-white hover:bg-black/90 rounded-full">
                   <CheckCircle2 className="w-4 h-4 mr-2" />
                   Guardar Cápsula
                 </Button>
-                <Button 
-                  variant="outline" 
+                <Button
+                  variant="outline"
                   className="rounded-full border-gray-200"
                   onClick={() => {
                     setResult(null);
                     setInputValue('');
-                    clearVideo();
+                    clearFile();
                   }}
                 >
                   Procesar Otro
                 </Button>
-                <Button 
-                  variant="ghost" 
-                  className="rounded-full ml-auto"
-                  onClick={copyToClipboard}
-                >
+                <Button variant="ghost" className="rounded-full ml-auto" onClick={copyToClipboard}>
                   {copied ? (
-                    <>
-                      <Check className="w-4 h-4 mr-2" />
-                      Copiado
-                    </>
+                    <><Check className="w-4 h-4 mr-2" />Copiado</>
                   ) : (
-                    <>
-                      <Copy className="w-4 h-4 mr-2" />
-                      Copiar
-                    </>
+                    <><Copy className="w-4 h-4 mr-2" />Copiar</>
                   )}
                 </Button>
               </div>

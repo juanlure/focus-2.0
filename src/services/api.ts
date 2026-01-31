@@ -19,6 +19,8 @@ export interface CapsuleData {
   keyInsights?: string[];
   deadline?: string | null;
   processedWith?: string;
+  extractedText?: string | null;
+  mediaAnalysis?: string | null;
 }
 
 interface ProcessResponse {
@@ -30,6 +32,48 @@ interface ProcessResponse {
 
 interface CapsulesResponse {
   capsules: CapsuleData[];
+}
+
+// Supported file types by Gemini 3 Flash
+export const SUPPORTED_FILE_TYPES = {
+  image: {
+    extensions: ['.png', '.jpg', '.jpeg', '.webp', '.heic', '.heif'],
+    mimeTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif'],
+    maxSize: 7 * 1024 * 1024, // 7MB
+    label: 'Imágenes'
+  },
+  audio: {
+    extensions: ['.mp3', '.wav', '.m4a', '.flac', '.ogg', '.aac', '.webm'],
+    mimeTypes: ['audio/mpeg', 'audio/wav', 'audio/m4a', 'audio/flac', 'audio/ogg', 'audio/aac', 'audio/webm'],
+    maxSize: 50 * 1024 * 1024, // 50MB
+    label: 'Audio'
+  },
+  video: {
+    extensions: ['.mp4', '.webm', '.mov', '.mpeg', '.wmv', '.flv', '.3gp'],
+    mimeTypes: ['video/mp4', 'video/webm', 'video/quicktime', 'video/mpeg', 'video/wmv', 'video/x-flv', 'video/3gpp'],
+    maxSize: 50 * 1024 * 1024, // 50MB
+    label: 'Video'
+  },
+  document: {
+    extensions: ['.pdf', '.txt'],
+    mimeTypes: ['application/pdf', 'text/plain'],
+    maxSize: 50 * 1024 * 1024, // 50MB
+    label: 'Documentos'
+  }
+};
+
+// Get all supported extensions
+export function getAllSupportedExtensions(): string {
+  return Object.values(SUPPORTED_FILE_TYPES)
+    .flatMap(t => t.extensions)
+    .join(',');
+}
+
+// Get all supported MIME types
+export function getAllSupportedMimeTypes(): string {
+  return Object.values(SUPPORTED_FILE_TYPES)
+    .flatMap(t => t.mimeTypes)
+    .join(',');
 }
 
 // Get auth headers
@@ -88,7 +132,6 @@ export async function processContent(
 
     const result = await response.json();
 
-    // Save to localStorage
     if (result.success && result.capsule) {
       addCapsuleToStorage(result.capsule);
     }
@@ -103,7 +146,7 @@ export async function processContent(
   }
 }
 
-// Process URL with Gemini 3 Flash
+// Process URL with Gemini 3 Flash (YouTube, web pages)
 export async function processURL(url: string): Promise<ProcessResponse> {
   try {
     const response = await fetch(`${API_BASE_URL}/process-url`, {
@@ -123,7 +166,50 @@ export async function processURL(url: string): Promise<ProcessResponse> {
 
     const result = await response.json();
 
-    // Save to localStorage
+    if (result.success && result.capsule) {
+      addCapsuleToStorage(result.capsule);
+    }
+
+    return result;
+  } catch (error) {
+    console.error('API Error:', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    };
+  }
+}
+
+// Process file with Gemini 3 Flash (images, audio, video, PDF)
+export async function processFile(
+  file: File
+): Promise<ProcessResponse> {
+  try {
+    // Convert file to base64
+    const base64Data = await fileToBase64(file);
+
+    const response = await fetch(`${API_BASE_URL}/process-file`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({
+        fileData: base64Data,
+        mimeType: file.type,
+        fileName: file.name,
+        source: file.name
+      }),
+    });
+
+    if (response.status === 401) {
+      return { success: false, error: 'Sesión expirada. Por favor, inicia sesión de nuevo.' };
+    }
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || 'Failed to process file');
+    }
+
+    const result = await response.json();
+
     if (result.success && result.capsule) {
       addCapsuleToStorage(result.capsule);
     }
