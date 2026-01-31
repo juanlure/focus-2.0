@@ -224,20 +224,60 @@ export async function processFile(
   }
 }
 
-// Get all capsules from localStorage
+// Get all capsules from Backend (with localStorage fallback)
 export async function getCapsules(): Promise<CapsulesResponse> {
-  return { capsules: getStoredCapsules() };
+  try {
+    const response = await fetch(`${API_BASE_URL}/capsules`, {
+      headers: getAuthHeaders(),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      saveCapsulesToStorage(data.capsules); // Update local cache
+      return data;
+    }
+    throw new Error('Failed to fetch from API');
+  } catch (error) {
+    console.warn('API fetch failed, falling back to localStorage:', error);
+    return { capsules: getStoredCapsules() };
+  }
 }
 
-// Get single capsule from localStorage
+// Get single capsule from Backend
 export async function getCapsule(id: string): Promise<{ capsule?: CapsuleData }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/capsules/${id}`, {
+      headers: getAuthHeaders(),
+    });
+
+    if (response.ok) {
+      return await response.json();
+    }
+  } catch (error) {
+    console.warn('API fetch failed for single capsule:', error);
+  }
+
+  // Fallback to local
   const capsules = getStoredCapsules();
   const capsule = capsules.find(c => c.id === id);
   return { capsule };
 }
 
-// Delete capsule from localStorage
+// Delete capsule from Backend and localStorage
 export async function deleteCapsule(id: string): Promise<{ success: boolean }> {
+  try {
+    const response = await fetch(`${API_BASE_URL}/capsules/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      console.error('Failed to delete from backend');
+    }
+  } catch (error) {
+    console.error('API delete failed:', error);
+  }
+
   const capsules = getStoredCapsules();
   const filtered = capsules.filter(c => c.id !== id);
   saveCapsulesToStorage(filtered);
