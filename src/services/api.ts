@@ -1,4 +1,6 @@
-// API service for FocusBrief - Vercel deployment
+// API service for FocusBrief - Vercel deployment with Gemini 3 Flash
+import { getToken } from './auth';
+
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 const STORAGE_KEY = 'focusbrief_capsules';
 
@@ -14,6 +16,9 @@ export interface CapsuleData {
   source: string;
   sourceType: string;
   createdAt: string;
+  keyInsights?: string[];
+  deadline?: string | null;
+  processedWith?: string;
 }
 
 interface ProcessResponse {
@@ -25,6 +30,18 @@ interface ProcessResponse {
 
 interface CapsulesResponse {
   capsules: CapsuleData[];
+}
+
+// Get auth headers
+function getAuthHeaders(): HeadersInit {
+  const token = getToken();
+  const headers: HeadersInit = {
+    'Content-Type': 'application/json',
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
 }
 
 // Local storage helpers
@@ -47,7 +64,7 @@ function addCapsuleToStorage(capsule: CapsuleData): void {
   saveCapsulesToStorage(capsules);
 }
 
-// Process text content with Gemini
+// Process text content with Gemini 3 Flash
 export async function processContent(
   content: string,
   sourceType: string = 'text',
@@ -56,11 +73,13 @@ export async function processContent(
   try {
     const response = await fetch(`${API_BASE_URL}/process`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ content, sourceType, source }),
     });
+
+    if (response.status === 401) {
+      return { success: false, error: 'Sesión expirada. Por favor, inicia sesión de nuevo.' };
+    }
 
     if (!response.ok) {
       const error = await response.json();
@@ -84,16 +103,18 @@ export async function processContent(
   }
 }
 
-// Process URL with Gemini
+// Process URL with Gemini 3 Flash
 export async function processURL(url: string): Promise<ProcessResponse> {
   try {
     const response = await fetch(`${API_BASE_URL}/process-url`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: getAuthHeaders(),
       body: JSON.stringify({ url }),
     });
+
+    if (response.status === 401) {
+      return { success: false, error: 'Sesión expirada. Por favor, inicia sesión de nuevo.' };
+    }
 
     if (!response.ok) {
       const error = await response.json();
@@ -163,4 +184,9 @@ export function fileToBase64(file: File): Promise<string> {
     };
     reader.onerror = reject;
   });
+}
+
+// Clear all capsules
+export function clearAllCapsules(): void {
+  localStorage.removeItem(STORAGE_KEY);
 }

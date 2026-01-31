@@ -21,15 +21,27 @@ import CapsuleDetail from './app/CapsuleDetail';
 import NewCapsule from './app/NewCapsule';
 import Archive from './app/Archive';
 import Settings from './app/Settings';
+import Login from './app/Login';
+
+// Auth
+import { isAuthenticated } from './services/auth';
 
 gsap.registerPlugin(ScrollTrigger);
+
+// Protected Route Component
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  if (!isAuthenticated()) {
+    return <Navigate to="/login" replace />;
+  }
+  return <>{children}</>;
+}
 
 // Landing Page Component
 function LandingPage() {
   useEffect(() => {
     document.documentElement.style.scrollBehavior = 'smooth';
     ScrollTrigger.refresh();
-    
+
     return () => {
       ScrollTrigger.getAll().forEach((trigger) => trigger.kill());
     };
@@ -57,11 +69,19 @@ function App() {
   return (
     <HashRouter>
       <Routes>
-        {/* Landing Page */}
+        {/* Public Routes */}
         <Route path="/" element={<LandingPage />} />
-        
-        {/* App Routes */}
-        <Route path="/app" element={<AppLayout />}>
+        <Route path="/login" element={<Login />} />
+
+        {/* Protected App Routes */}
+        <Route
+          path="/app"
+          element={
+            <ProtectedRoute>
+              <AppLayout />
+            </ProtectedRoute>
+          }
+        >
           <Route index element={<Navigate to="/app/dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="capsule/:id" element={<CapsuleDetail />} />

@@ -1,31 +1,54 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import { verifyToken } from './verify.js';
 
-const SYSTEM_PROMPT = `Eres un asistente especializado en curación cognitiva. Tu tarea es analizar contenido y extraer información accionable.
+const SYSTEM_PROMPT = `Eres un asistente experto en curación cognitiva y productividad personal. Tu tarea es analizar cualquier tipo de contenido (artículos, emails, mensajes, videos, documentos) y transformarlo en información accionable.
 
-Para cada contenido que recibas, debes generar una "Cápsula de Acción" con la siguiente estructura JSON:
+INSTRUCCIONES:
+1. Lee y comprende profundamente el contenido
+2. Identifica los puntos clave y el propósito principal
+3. Detecta cualquier acción implícita o explícita requerida
+4. Evalúa la urgencia y el sentimiento del contenido
+5. Genera acciones específicas, medibles y ejecutables
+
+Para cada contenido, genera una "Cápsula de Acción" con esta estructura JSON exacta:
 
 {
-  "title": "Título conciso y descriptivo del contenido (max 100 caracteres)",
-  "summary": "Resumen ejecutivo de 2-3 oraciones que capture la esencia del contenido",
-  "actions": ["Acción 1 específica y ejecutable", "Acción 2", "Acción 3"],
+  "title": "Título conciso que capture la esencia (max 80 caracteres)",
+  "summary": "Resumen ejecutivo de 2-4 oraciones que explique: qué es, por qué importa, y el contexto clave",
+  "actions": [
+    "Acción 1: verbo + objeto + contexto específico",
+    "Acción 2: verbo + objeto + contexto específico",
+    "Acción 3: verbo + objeto + contexto específico"
+  ],
   "priority": "high|medium|low",
   "sentiment": "positive|neutral|negative|urgent",
-  "tags": ["tag1", "tag2", "tag3"],
-  "readTime": <número estimado de segundos para leer el resumen>
+  "tags": ["tag1", "tag2", "tag3", "tag4"],
+  "readTime": <segundos estimados para procesar la cápsula>,
+  "keyInsights": ["Insight 1", "Insight 2"],
+  "deadline": "YYYY-MM-DD o null si no aplica"
 }
 
-Criterios para prioridad:
-- high: Requiere acción inmediata, deadline cercano, impacto alto
-- medium: Importante pero no urgente
-- low: Informativo, para referencia futura
+CRITERIOS DE PRIORIDAD:
+- HIGH: Acción requerida en 24-48h, impacto significativo, consecuencias de no actuar
+- MEDIUM: Importante pero flexible en timing, mejora o oportunidad
+- LOW: Informativo, referencia futura, nice-to-have
 
-Criterios para sentiment:
-- positive: Oportunidades, buenas noticias, logros
-- neutral: Información objetiva, datos
-- negative: Problemas, riesgos, alertas
-- urgent: Requiere atención inmediata
+CRITERIOS DE SENTIMIENTO:
+- URGENT: Deadline explícito, palabras como "urgente", "inmediato", "crítico"
+- POSITIVE: Oportunidades, logros, buenas noticias, avances
+- NEGATIVE: Problemas, riesgos, alertas, quejas
+- NEUTRAL: Información objetiva, datos, actualizaciones rutinarias
 
-IMPORTANTE: Responde SOLO con el JSON válido, sin texto adicional ni markdown.`;
+ACCIONES EFECTIVAS:
+- Empiezan con verbo de acción: Revisar, Responder, Programar, Investigar, Contactar, Implementar
+- Son específicas: "Responder a Juan sobre propuesta de diseño" no "Responder email"
+- Tienen contexto: incluyen nombres, fechas, lugares cuando están disponibles
+- Son ejecutables: algo que puedes hacer en una sesión de trabajo
+
+IMPORTANTE:
+- Responde SOLO con JSON válido, sin markdown ni texto adicional
+- Genera entre 3-5 acciones relevantes
+- Los tags deben ser útiles para filtrar y buscar`;
 
 function generateId() {
   return `cap_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -34,7 +57,7 @@ function generateId() {
 async function fetchUrlContent(url) {
   const response = await fetch(url, {
     headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; FocusBrief/1.0)'
+      'User-Agent': 'Mozilla/5.0 (compatible; FocusBrief/1.0; Gemini 3 Flash powered)'
     }
   });
 
@@ -44,27 +67,38 @@ async function fetchUrlContent(url) {
 
   const html = await response.text();
 
+  // Extract title
+  const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
+  const title = titleMatch ? titleMatch[1].trim() : '';
+
+  // Extract meta description
+  const descMatch = html.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
+  const description = descMatch ? descMatch[1].trim() : '';
+
   // Basic HTML to text conversion
   let text = html
     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+    .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+    .replace(/<header[^>]*>[\s\S]*?<\/header>/gi, '')
     .replace(/<[^>]+>/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 
-  // Limit content length
-  if (text.length > 10000) {
-    text = text.substring(0, 10000) + '...';
+  // Limit content length for optimal processing
+  if (text.length > 15000) {
+    text = text.substring(0, 15000) + '...';
   }
 
-  return text;
+  return { text, title, description };
 }
 
 export default async function handler(req, res) {
   // CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -72,6 +106,12 @@ export default async function handler(req, res) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' });
+  }
+
+  // Verify authentication
+  const token = req.headers.authorization?.replace('Bearer ', '');
+  if (!verifyToken(token)) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' });
   }
 
   try {
@@ -91,12 +131,18 @@ export default async function handler(req, res) {
       sourceType = 'youtube';
     } else if (url.includes('twitter.com') || url.includes('x.com')) {
       sourceType = 'twitter';
+    } else if (url.includes('linkedin.com')) {
+      sourceType = 'linkedin';
+    } else if (url.includes('github.com')) {
+      sourceType = 'github';
+    } else if (url.endsWith('.pdf')) {
+      sourceType = 'pdf';
     }
 
     // Fetch content from URL
-    const content = await fetchUrlContent(url);
+    const { text: content, title: pageTitle, description: pageDesc } = await fetchUrlContent(url);
 
-    if (!content || content.length < 50) {
+    if (!content || content.length < 100) {
       return res.status(400).json({
         success: false,
         error: 'Could not extract enough content from URL'
@@ -104,15 +150,37 @@ export default async function handler(req, res) {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
+
+    // Use Gemini 3 Flash with advanced configuration
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-3-flash-preview',
+      generationConfig: {
+        temperature: 0.7,
+        topP: 0.9,
+        maxOutputTokens: 4096,
+      }
+    });
 
     const prompt = `${SYSTEM_PROMPT}
 
-Contenido a analizar (tipo: ${sourceType}, fuente: ${url}):
+=== CONTENIDO WEB A ANALIZAR ===
+URL: ${url}
+Tipo: ${sourceType}
+Título de página: ${pageTitle || 'No disponible'}
+Meta descripción: ${pageDesc || 'No disponible'}
+Fecha de análisis: ${new Date().toISOString()}
 
-${content}`;
+CONTENIDO EXTRAÍDO:
+${content}
 
-    const result = await model.generateContent(prompt);
+=== FIN DEL CONTENIDO ===
+
+Genera la Cápsula de Acción en JSON:`;
+
+    const result = await model.generateContent({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    });
+
     const response = await result.response;
     let text = response.text();
 
@@ -124,15 +192,24 @@ ${content}`;
       capsuleData = JSON.parse(text);
     } catch (parseError) {
       console.error('Failed to parse Gemini response:', text);
-      return res.status(500).json({ success: false, error: 'Invalid response from AI' });
+      return res.status(500).json({ success: false, error: 'Invalid response from AI', rawResponse: text });
     }
 
     const capsule = {
       id: generateId(),
-      ...capsuleData,
+      title: capsuleData.title || pageTitle,
+      summary: capsuleData.summary,
+      actions: capsuleData.actions || [],
+      priority: capsuleData.priority || 'medium',
+      sentiment: capsuleData.sentiment || 'neutral',
+      tags: capsuleData.tags || [],
+      readTime: capsuleData.readTime || 30,
+      keyInsights: capsuleData.keyInsights || [],
+      deadline: capsuleData.deadline || null,
       source: url,
       sourceType,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      processedWith: 'gemini-3-flash-preview'
     };
 
     res.status(200).json({ success: true, capsule });

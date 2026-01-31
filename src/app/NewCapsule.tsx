@@ -318,7 +318,7 @@ export default function NewCapsule() {
           <div className="bg-gray-50 rounded-xl p-4 mb-6">
             <div className="flex items-center gap-2 mb-2">
               <Sparkles className="w-4 h-4 text-black" />
-              <span className="font-medium text-sm">Gemini 3 Flash Preview</span>
+              <span className="font-medium text-sm">Gemini 3 Flash</span>
             </div>
             <ul className="text-sm text-black/60 space-y-1">
               <li>• Soporta texto, imágenes, videos, audio y PDFs</li>
