@@ -1,5 +1,38 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { verifyToken } from './verify.js';
+import crypto from 'crypto';
+
+// Token verification (inline to avoid import issues in Vercel)
+function verifyToken(token) {
+  try {
+    if (!token) return false;
+
+    const validPassword = process.env.AUTH_PASSWORD;
+    if (!validPassword) return false;
+
+    const decoded = Buffer.from(token, 'base64').toString('utf8');
+    const lastColonIndex = decoded.lastIndexOf(':');
+    if (lastColonIndex === -1) return false;
+
+    const tokenData = decoded.substring(0, lastColonIndex);
+    const signature = decoded.substring(lastColonIndex + 1);
+
+    // Verify signature
+    const expectedSignature = crypto
+      .createHmac('sha256', validPassword)
+      .update(tokenData)
+      .digest('hex');
+
+    if (signature !== expectedSignature) return false;
+
+    // Check expiry
+    const { expiry } = JSON.parse(tokenData);
+    if (Date.now() > expiry) return false;
+
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
 
 const SYSTEM_PROMPT = `Eres un asistente experto en curación cognitiva y productividad personal. Tu tarea es analizar cualquier tipo de contenido (artículos, emails, mensajes, videos, documentos) y transformarlo en información accionable.
 
@@ -89,7 +122,7 @@ export default async function handler(req, res) {
 
     // Use Gemini 3 Flash with advanced configuration
     const model = genAI.getGenerativeModel({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.0-flash',
       generationConfig: {
         temperature: 0.7,
         topP: 0.9,
@@ -142,7 +175,7 @@ Genera la Cápsula de Acción en JSON:`;
       source,
       sourceType,
       createdAt: new Date().toISOString(),
-      processedWith: 'gemini-3-flash-preview'
+      processedWith: 'gemini-2.0-flash'
     };
 
     res.status(200).json({ success: true, capsule });
