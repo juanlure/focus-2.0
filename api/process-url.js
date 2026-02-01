@@ -152,25 +152,47 @@ Responde SOLO con el JSON de la Cápsula de Acción.`
       sourceType = 'twitter';
       const tweetId = url.match(/(?:twitter\.com|x\.com)\/\w+\/status\/(\d+)/)?.[1];
 
-      let tweetContent = `URL: ${url}`;
-      if (tweetId) {
-        try {
-          const response = await fetch(`https://api.fxtwitter.com/status/${tweetId}`, {
-            headers: { 'User-Agent': 'FocusBrief/1.0' }
-          });
-          if (response.ok) {
-            const data = await response.json();
+      if (!tweetId) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'URL de tweet inválida. Asegúrate de copiar la URL completa del tweet.'
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+
+      let tweetContent = null;
+      try {
+        const response = await fetch(`https://api.fxtwitter.com/status/${tweetId}`, {
+          headers: { 'User-Agent': 'FocusBrief/1.0' }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          // Verificar que el tweet existe y tiene datos válidos
+          if (data.code === 200 && data.tweet) {
             const tweet = data.tweet;
-            tweetContent = `TIPO: TWEET DE X/TWITTER\nAUTOR: ${tweet.author.name} (@${tweet.author.screen_name})\nCONTENIDO:\n\n${tweet.text}\n\nMETADATOS: ${tweet.likes} Likes, ${tweet.retweets} Retweets`;
+            tweetContent = `TIPO: TWEET DE X/TWITTER\nAUTOR: ${tweet.author?.name || 'Desconocido'} (@${tweet.author?.screen_name || 'unknown'})\nCONTENIDO:\n\n${tweet.text || tweet.raw_text?.text || '[Sin contenido]'}\n\nMETADATOS: ${tweet.likes || 0} Likes, ${tweet.retweets || 0} Retweets`;
           }
-        } catch (e) {
-          console.warn('Fxtwitter fallback failed');
         }
+      } catch (e) {
+        console.warn('Fxtwitter fetch failed:', e.message);
+      }
+
+      // Si no pudimos obtener el tweet, devolver error específico
+      if (!tweetContent) {
+        return new Response(JSON.stringify({
+          success: false,
+          error: 'No se pudo obtener el tweet. Posibles causas: el tweet fue eliminado, la cuenta está suspendida, o el contenido es privado.'
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
       }
 
       contentParts = [{
         text: `Analiza este Tweet y genera una Cápsula de Acción.
-        
+
 IMPORTANTE: Si el Tweet contiene imágenes o videos, fxtwitter nos proporciona el texto y metadatos.
 
 ${tweetContent}
