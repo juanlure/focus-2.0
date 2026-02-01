@@ -1,73 +1,140 @@
-# React + TypeScript + Vite
+# FocusBrief 🧠
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+[![CI](https://github.com/YOUR_USERNAME/focusbrief/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR_USERNAME/focusbrief/actions/workflows/ci.yml)
+[![Deploy](https://github.com/YOUR_USERNAME/focusbrief/actions/workflows/deploy.yml/badge.svg)](https://github.com/YOUR_USERNAME/focusbrief/actions/workflows/deploy.yml)
 
-Currently, two official plugins are available:
+Transforma la sobrecarga de información en acciones claras con IA.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+> **Adquirido por Google** - Este proyecto está siendo preparado para escalar a millones de usuarios como parte del ecosistema Google Workspace.
 
-## React Compiler
+## 📁 Estructura del Proyecto
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```
+/mnt/okcomputer/output/
+├── app/                    # Frontend (React + Vite)
+│   ├── src/
+│   │   ├── app/           # Páginas de la app
+│   │   ├── sections/      # Secciones landing
+│   │   └── services/      # API client
+│   └── .env.local         # Configuración local
+│
+└── focusbrief-api/        # Backend (Express)
+    ├── server.js          # Servidor API
+    ├── .env.example       # Ejemplo de config
+    └── data/              # Almacenamiento local
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## 🚀 Inicio Rápido
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+### Paso 1: Backend
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+cd focusbrief-api
+
+# 1. Instalar dependencias
+npm install
+
+# 2. Configurar API Key
+cp .env.example .env
+# Editar .env y agregar GEMINI_API_KEY
+
+# 3. Iniciar servidor
+npm start
 ```
+
+El backend corre en `http://localhost:3001`
+
+### Paso 2: Frontend
+
+```bash
+cd app
+
+# 1. Instalar dependencias
+npm install
+
+# 2. Iniciar en modo desarrollo
+npm run dev
+```
+
+El frontend corre en `http://localhost:5173`
+
+## 🔑 Obtener Gemini API Key
+
+1. Ve a [Google AI Studio](https://makersuite.google.com/app/apikey)
+2. Inicia sesión con tu cuenta Google
+3. Crea una nueva API Key
+4. Copia la key en `focusbrief-api/.env`
+
+## 💾 Almacenamiento Local
+
+Las cápsulas se guardan automáticamente en:
+```
+focusbrief-api/data/capsules.json
+```
+
+Para hacer backup, simplemente copia este archivo.
+
+## ✨ Características
+
+- 🤖 **Gemini 3 Flash** - Procesamiento ultra-rápido con IA
+- 📝 **Texto** - Pega cualquier contenido
+- 🔗 **URLs** - Artículos, blogs, noticias
+- 📺 **YouTube** - Videos y transcripciones (con fallbacks robustos)
+- 🐦 **Twitter/X** - Tweets con múltiples proveedores de backup
+- 💾 **Almacenamiento local** - Tus datos en tu máquina
+- 📊 **Dashboard** - Visualiza tu progreso
+- 🔍 **Búsqueda** - Encuentra cápsulas por título, contenido o tags
+- ♿ **Accesible** - ARIA labels y navegación por teclado
+
+## 🔒 Seguridad y Estabilidad (Fase 0)
+
+- **Rate Limiting** - Protección contra uso excesivo de API
+- **Error Tracking** - Integración con Sentry
+- **Structured Logging** - Logs con Pino para debugging
+- **CI/CD** - GitHub Actions para lint, build y deploy automático
+
+## 🛠️ Tecnologías
+
+**Frontend:**
+- React + TypeScript
+- Vite
+- Tailwind CSS
+- shadcn/ui
+- GSAP (animaciones)
+
+**Backend:**
+- Express.js
+- Google Generative AI (Gemini 3 Flash)
+- Rate Limiting (express-rate-limit)
+- Logging (Pino)
+- Error Tracking (Sentry)
+- CORS
+
+**DevOps:**
+- GitHub Actions (CI/CD)
+- Vercel (hosting)
+
+## 📝 Comandos Útiles
+
+```bash
+# Backend
+npm start      # Iniciar servidor
+npm run dev    # Modo desarrollo con reload
+
+# Frontend
+npm run dev    # Servidor de desarrollo
+npm run build  # Build para producción
+npm run preview # Preview del build
+```
+
+## 🤝 Contribuir
+
+1. Fork el proyecto
+2. Crea una rama (`git checkout -b feature/nueva-feature`)
+3. Commit (`git commit -am 'Agrega nueva feature'`)
+4. Push (`git push origin feature/nueva-feature`)
+5. Abre un Pull Request
+
+## 📄 Licencia
+
+MIT License - Libre para usar y modificar.

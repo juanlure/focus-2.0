@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import gsap from 'gsap';
 import {
@@ -22,12 +22,15 @@ import {
   Github,
   Globe,
   ExternalLink,
-  Sparkles
+  Sparkles,
+  SearchX
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { getCapsules } from '@/services/api';
+import { useSearch } from '@/contexts/SearchContext';
+import { useDebounce } from '@/hooks/useDebounce';
 
 const sourceIcons: Record<string, React.ElementType> = {
   whatsapp: MessageSquare,
@@ -219,6 +222,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const statsRef = useRef<HTMLDivElement>(null);
+  const { searchQuery } = useSearch();
+  const debouncedSearch = useDebounce(searchQuery, 300);
 
   const fetchCapsules = async () => {
     try {
@@ -237,10 +242,34 @@ export default function Dashboard() {
     fetchCapsules();
   }, []);
 
-  const filteredCapsules = capsules.filter(capsule => {
-    if (filter !== 'all' && capsule.priority !== filter) return false;
-    return true;
-  });
+  // Filter capsules by priority and search query
+  const filteredCapsules = useMemo(() => {
+    return capsules.filter(capsule => {
+      // Priority filter
+      if (filter !== 'all' && capsule.priority !== filter) return false;
+
+      // Search filter
+      if (debouncedSearch.trim()) {
+        const searchLower = debouncedSearch.toLowerCase();
+        const matchesTitle = capsule.title.toLowerCase().includes(searchLower);
+        const matchesSummary = capsule.summary.toLowerCase().includes(searchLower);
+        const matchesTags = capsule.tags.some(tag =>
+          tag.toLowerCase().includes(searchLower)
+        );
+        const matchesActions = capsule.actions.some(action =>
+          action.toLowerCase().includes(searchLower)
+        );
+
+        if (!matchesTitle && !matchesSummary && !matchesTags && !matchesActions) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [capsules, filter, debouncedSearch]);
+
+  const isSearching = debouncedSearch.trim().length > 0;
 
   // Calculate stats
   const totalCapsules = capsules.length;
@@ -389,15 +418,25 @@ export default function Dashboard() {
       ) : (
         <div className="text-center py-20">
           <div className="w-20 h-20 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-4">
-            <Sparkles className="w-8 h-8 text-black/30" />
+            {isSearching ? (
+              <SearchX className="w-8 h-8 text-black/30" />
+            ) : (
+              <Sparkles className="w-8 h-8 text-black/30" />
+            )}
           </div>
           <h3 className="text-xl font-semibold mb-2">
-            {capsules.length === 0 ? 'No hay cápsulas aún' : 'No hay cápsulas con este filtro'}
+            {capsules.length === 0
+              ? 'No hay cápsulas aún'
+              : isSearching
+                ? `Sin resultados para "${debouncedSearch}"`
+                : 'No hay cápsulas con este filtro'}
           </h3>
           <p className="text-black/60 mb-4">
             {capsules.length === 0
               ? 'Crea tu primera cápsula para empezar a organizar tu información'
-              : 'Ajusta los filtros para ver más resultados'}
+              : isSearching
+                ? 'Intenta con otros términos o revisa los filtros'
+                : 'Ajusta los filtros para ver más resultados'}
           </p>
           {capsules.length === 0 && (
             <Button asChild className="bg-black text-white hover:bg-black/90 rounded-full">

@@ -312,18 +312,19 @@ export default function CapsuleDetail() {
                 size="icon"
                 className="h-9 w-9"
                 onClick={handleShare}
-                title="Compartir"
+                aria-label={shared ? 'Compartido' : 'Compartir cápsula'}
               >
-                {shared ? <Check className="w-4 h-4 text-green-600" /> : <Share2 className="w-4 h-4" />}
+                {shared ? <Check className="w-4 h-4 text-green-600" aria-hidden="true" /> : <Share2 className="w-4 h-4" aria-hidden="true" />}
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
                 className={`h-9 w-9 ${archived ? 'text-amber-600' : ''}`}
                 onClick={handleArchive}
-                title={archived ? 'Desarchivar' : 'Archivar'}
+                aria-label={archived ? 'Desarchivar cápsula' : 'Archivar cápsula'}
+                aria-pressed={archived}
               >
-                <Archive className="w-4 h-4" />
+                <Archive className="w-4 h-4" aria-hidden="true" />
               </Button>
             </div>
           </div>
@@ -354,9 +355,9 @@ export default function CapsuleDetail() {
                   size="icon"
                   className="h-6 w-6"
                   onClick={handleCopyLink}
-                  title="Copiar enlace"
+                  aria-label={copied ? 'Enlace copiado' : 'Copiar enlace de la fuente'}
                 >
-                  {copied ? <Check className="w-3 h-3 text-green-600" /> : <Copy className="w-3 h-3" />}
+                  {copied ? <Check className="w-3 h-3 text-green-600" aria-hidden="true" /> : <Copy className="w-3 h-3" aria-hidden="true" />}
                 </Button>
               )}
             </div>

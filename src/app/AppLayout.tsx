@@ -9,13 +9,15 @@ import {
   Sparkles,
   Menu,
   LogOut,
-  Brain
+  Brain,
+  X
 } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { logout } from '@/services/auth';
 import { getCapsules } from '@/services/api';
+import { SearchProvider, useSearch } from '@/contexts/SearchContext';
 
 const navItems = [
   { path: '/app/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -24,10 +26,11 @@ const navItems = [
   { path: '/app/settings', label: 'Configuración', icon: Settings },
 ];
 
-export default function AppLayout() {
+function AppLayoutContent() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [stats, setStats] = useState({ totalCapsules: 0, savedHours: 0, thisWeek: 0 });
+  const { searchQuery, setSearchQuery } = useSearch();
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -172,25 +175,45 @@ export default function AppLayout() {
                 size="icon"
                 className="lg:hidden"
                 onClick={() => setIsSidebarOpen(true)}
+                aria-label="Abrir menú de navegación"
               >
-                <Menu className="w-5 h-5" />
+                <Menu className="w-5 h-5" aria-hidden="true" />
               </Button>
 
               <div className="relative max-w-md w-full hidden sm:block">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black/40" />
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-black/40" aria-hidden="true" />
                 <Input
                   placeholder="Buscar cápsulas..."
-                  className="pl-10 bg-gray-50 border-0 focus-visible:ring-1"
+                  className="pl-10 pr-8 bg-gray-50 border-0 focus-visible:ring-1"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  aria-label="Buscar cápsulas"
                 />
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6"
+                    onClick={() => setSearchQuery('')}
+                    aria-label="Limpiar búsqueda"
+                  >
+                    <X className="w-3 h-3" aria-hidden="true" />
+                  </Button>
+                )}
               </div>
             </div>
 
             {/* Right: Notifications + New */}
             <div className="flex items-center gap-3">
-              <Button variant="ghost" size="icon" className="relative">
-                <Bell className="w-5 h-5" />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative"
+                aria-label={stats.thisWeek > 0 ? `Notificaciones (${stats.thisWeek} nuevas esta semana)` : 'Notificaciones'}
+              >
+                <Bell className="w-5 h-5" aria-hidden="true" />
                 {stats.thisWeek > 0 && (
-                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" />
+                  <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full" aria-hidden="true" />
                 )}
               </Button>
               <Button
@@ -212,5 +235,13 @@ export default function AppLayout() {
         </main>
       </div>
     </div>
+  );
+}
+
+export default function AppLayout() {
+  return (
+    <SearchProvider>
+      <AppLayoutContent />
+    </SearchProvider>
   );
 }

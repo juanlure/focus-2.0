@@ -1,5 +1,6 @@
 // API service for FocusBrief - Vercel deployment with Gemini 3 Flash
 import { getToken } from './auth';
+import { mapApiError, ERROR_MESSAGES } from '@/lib/errors';
 
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 const STORAGE_KEY = 'focusbrief_capsules';
@@ -122,12 +123,16 @@ export async function processContent(
     });
 
     if (response.status === 401) {
-      return { success: false, error: 'Sesión expirada. Por favor, inicia sesión de nuevo.' };
+      return { success: false, error: ERROR_MESSAGES.SESSION_EXPIRED };
+    }
+
+    if (response.status === 429) {
+      return { success: false, error: ERROR_MESSAGES.RATE_LIMITED };
     }
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to process content');
+      const errorData = await response.json().catch(() => ({}));
+      return { success: false, error: mapApiError(errorData) };
     }
 
     const result = await response.json();
@@ -141,7 +146,7 @@ export async function processContent(
     console.error('API Error:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: mapApiError(error instanceof Error ? error.message : 'Unknown error'),
     };
   }
 }
@@ -156,12 +161,16 @@ export async function processURL(url: string): Promise<ProcessResponse> {
     });
 
     if (response.status === 401) {
-      return { success: false, error: 'Sesión expirada. Por favor, inicia sesión de nuevo.' };
+      return { success: false, error: ERROR_MESSAGES.SESSION_EXPIRED };
+    }
+
+    if (response.status === 429) {
+      return { success: false, error: ERROR_MESSAGES.RATE_LIMITED };
     }
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to process URL');
+      const errorData = await response.json().catch(() => ({}));
+      return { success: false, error: mapApiError(errorData) };
     }
 
     const result = await response.json();
@@ -175,7 +184,7 @@ export async function processURL(url: string): Promise<ProcessResponse> {
     console.error('API Error:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: mapApiError(error instanceof Error ? error.message : 'Unknown error'),
     };
   }
 }
@@ -187,6 +196,11 @@ export async function processFile(
   source: string = ''
 ): Promise<ProcessResponse> {
   try {
+    // Validate file size (50MB max)
+    if (file.size > 50 * 1024 * 1024) {
+      return { success: false, error: ERROR_MESSAGES.FILE_TOO_LARGE };
+    }
+
     const formData = new FormData();
     formData.append('file', file);
     formData.append('sourceType', sourceType);
@@ -203,12 +217,16 @@ export async function processFile(
     });
 
     if (response.status === 401) {
-      return { success: false, error: 'Sesión expirada. Por favor, inicia sesión de nuevo.' };
+      return { success: false, error: ERROR_MESSAGES.SESSION_EXPIRED };
+    }
+
+    if (response.status === 429) {
+      return { success: false, error: ERROR_MESSAGES.RATE_LIMITED };
     }
 
     if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.error || 'Failed to process file');
+      const errorData = await response.json().catch(() => ({}));
+      return { success: false, error: mapApiError(errorData) };
     }
 
     const result = await response.json();
@@ -222,7 +240,7 @@ export async function processFile(
     console.error('API Error:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: mapApiError(error instanceof Error ? error.message : 'Unknown error'),
     };
   }
 }
