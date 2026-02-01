@@ -71,7 +71,7 @@ export function ShareModal({
     return text;
   };
 
-  const handleCopy = async (format: 'plain' | 'formatted' = 'plain') => {
+  const handleCopy = async (format: 'plain' | 'compact' = 'plain') => {
     const text = generateShareText(format);
     try {
       await navigator.clipboard.writeText(text);
@@ -100,7 +100,7 @@ export function ShareModal({
       icon: Mail,
       color: 'text-red-600',
       bgColor: 'bg-red-50 hover:bg-red-100',
-      action: (text, url) => {
+      action: (text, _url) => {
         const subject = encodeURIComponent(`FocusBrief: ${title}`);
         const body = encodeURIComponent(text);
         window.open(`https://mail.google.com/mail/?view=cm&su=${subject}&body=${body}`, '_blank');
@@ -128,7 +128,7 @@ export function ShareModal({
       icon: Smartphone,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50 hover:bg-purple-100',
-      action: (text) => {
+      action: (_text) => {
         // Use compact format for SMS (character limits)
         const compactText = `${title}\n\n${summary.substring(0, 100)}...\n\n${actions.slice(0, 2).map((a, i) => `${i + 1}. ${a}`).join('\n')}${sourceUrl ? `\n\n${sourceUrl}` : ''}`;
         const encoded = encodeURIComponent(compactText);
