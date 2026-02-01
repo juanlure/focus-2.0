@@ -35,6 +35,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ShareModal } from '@/components/ShareModal';
 import { getCapsule, deleteCapsule } from '@/services/api';
 
 const sourceIcons: Record<string, React.ElementType> = {
@@ -115,8 +116,8 @@ export default function CapsuleDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [shared, setShared] = useState(false);
   const [archived, setArchived] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -175,35 +176,9 @@ export default function CapsuleDetail() {
     }
   };
 
-  const handleShare = async () => {
+  const handleShare = () => {
     if (!capsule) return;
-
-    const shareText = `${capsule.title}\n\n${capsule.summary}\n\nAcciones:\n${capsule.actions.map((a, i) => `${i + 1}. ${a}`).join('\n')}${capsule.source && isValidUrl(capsule.source) ? `\n\nFuente: ${capsule.source}` : ''}`;
-
-    // Try Web Share API first
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: capsule.title,
-          text: shareText,
-          url: isValidUrl(capsule.source) ? capsule.source : undefined,
-        });
-        setShared(true);
-        setTimeout(() => setShared(false), 2000);
-        return;
-      } catch (err) {
-        // User cancelled or error, fall back to clipboard
-      }
-    }
-
-    // Fallback to clipboard
-    try {
-      await navigator.clipboard.writeText(shareText);
-      setShared(true);
-      setTimeout(() => setShared(false), 2000);
-    } catch (err) {
-      setError('No se pudo compartir');
-    }
+    setShareModalOpen(true);
   };
 
   const handleCopyLink = async () => {
@@ -312,9 +287,9 @@ export default function CapsuleDetail() {
                 size="icon"
                 className="h-9 w-9"
                 onClick={handleShare}
-                aria-label={shared ? 'Compartido' : 'Compartir cápsula'}
+                aria-label="Compartir cápsula"
               >
-                {shared ? <Check className="w-4 h-4 text-green-600" aria-hidden="true" /> : <Share2 className="w-4 h-4" aria-hidden="true" />}
+                <Share2 className="w-4 h-4" aria-hidden="true" />
               </Button>
               <Button
                 variant="ghost"
@@ -559,8 +534,8 @@ export default function CapsuleDetail() {
               className="rounded-full border-gray-200"
               onClick={handleShare}
             >
-              {shared ? <Check className="w-4 h-4 mr-2" /> : <Share2 className="w-4 h-4 mr-2" />}
-              {shared ? 'Copiado' : 'Compartir'}
+              <Share2 className="w-4 h-4 mr-2" />
+              Compartir
             </Button>
             <Button
               variant="outline"
@@ -573,6 +548,17 @@ export default function CapsuleDetail() {
           </div>
         </div>
       </div>
+
+      {/* Share Modal */}
+      <ShareModal
+        open={shareModalOpen}
+        onOpenChange={setShareModalOpen}
+        title={capsule.title}
+        summary={capsule.summary}
+        actions={capsule.actions}
+        sourceUrl={sourceIsUrl ? capsule.source : undefined}
+        tags={capsule.tags}
+      />
     </div>
   );
 }
