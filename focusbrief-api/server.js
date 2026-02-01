@@ -110,8 +110,12 @@ ESTRUCTURA DE RESPUESTA (JSON):
   "sentiment": "positive|neutral|negative|urgent",
   "tags": ["temática1", "temática2"],
   "readTime": <segundos para leer esta cápsula>,
-  "keyInsights": ["Insight profundo 1", "Insight profundo 2"]
+  "keyInsights": ["Insight profundo 1", "Insight profundo 2"],
+  "clipboardReady": ["Prompt, dirección o comando técnico para copiar/pegar"]
 }
+
+REGLAS ESPECÍFICAS:
+- clipboardReady: DEBES extraer cualquier prompt, dirección física, comando técnico o código que el usuario pueda querer usar directamente. Es para copiar y pegar en otro sitio. Si no hay nada, devuelve [].
 
 IMPORTANTE: Responde ÚNICAMENTE con el objeto JSON. Sin backticks, sin markdown labels, sin texto antes o después.`;
 
