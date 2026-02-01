@@ -117,7 +117,8 @@ ESTRUCTURA DE RESPUESTA (JSON):
 REGLAS ESPECÍFICAS:
 - clipboardReady: DEBES extraer cualquier prompt, dirección física, comando técnico o código que el usuario pueda querer usar directamente. Es para copiar y pegar en otro sitio. Si no hay nada, devuelve [].
 
-IMPORTANTE: Responde ÚNICAMENTE con el objeto JSON. Sin backticks, sin markdown labels, sin texto antes o después.`;
+IMPORTANTE: Responde ÚNICAMENTE con el objeto JSON. Sin backticks, sin markdown labels, sin texto antes o después.
+CLÁUSULA ANTIFANTASÍA: Basa tu respuesta EXCLUSIVAMENTE en el contenido enviado. Si el contenido es insuficiente o falta información clave, regístralo así. PROHIBIDO ALUCINAR O INVENTAR CONTEXTO NO EXPLÍCITO.`;
 
 // Process content with Gemini
 async function processWithGemini(content, sourceType, source) {
