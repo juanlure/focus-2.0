@@ -18,6 +18,7 @@ export interface CapsuleData {
   sourceType: string;
   createdAt: string;
   keyInsights?: string[];
+  clipboardReady?: string[];
   deadline?: string | null;
   processedWith?: string;
   extractedText?: string | null;

@@ -94,6 +94,7 @@ interface Capsule {
   sourceType: string;
   createdAt: string;
   keyInsights?: string[];
+  clipboardReady?: string[];
   extractedText?: string | null;
   mediaAnalysis?: string | null;
   processedWith?: string;
@@ -411,9 +412,58 @@ export default function CapsuleDetail() {
                   <Image className="w-5 h-5 text-blue-600" />
                   <h2 className="font-semibold text-lg">Análisis del Contenido</h2>
                 </div>
-                <p className="text-black/70 p-4 bg-blue-50 rounded-xl">
+                <div className="text-black/70 p-4 bg-blue-50 rounded-xl">
                   {capsule.mediaAnalysis}
-                </p>
+                </div>
+              </div>
+              <Separator className="my-6" />
+            </>
+          )}
+
+          {/* Clipboard Ready Section (Prompts, Addresses, etc) */}
+          {capsule.clipboardReady && capsule.clipboardReady.length > 0 && (
+            <>
+              <div className="mb-8">
+                <div className="flex items-center gap-2 mb-4">
+                  <div className="p-2 bg-indigo-100 rounded-lg">
+                    <Copy className="w-5 h-5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <h2 className="font-semibold text-lg leading-none mb-1">Preparado para LLM</h2>
+                    <p className="text-xs text-black/40">Datos listos para copiar y usar en tu chat de IA</p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {capsule.clipboardReady.map((item, i) => (
+                    <div
+                      key={i}
+                      className="group relative flex flex-col p-4 bg-gradient-to-br from-indigo-50/50 to-purple-50/50 border border-indigo-100 rounded-2xl transition-all hover:shadow-md hover:border-indigo-200"
+                    >
+                      <div className="flex items-start justify-between gap-4 mb-2">
+                        <span className="text-xs font-bold uppercase tracking-wider text-indigo-400">Elemento {i + 1}</span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 px-2 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-100 transition-colors"
+                          onClick={async () => {
+                            try {
+                              await navigator.clipboard.writeText(item);
+                              // Simple temporary feedback logic could be added here if needed
+                            } catch (err) {
+                              console.error('Failed to copy', err);
+                            }
+                          }}
+                        >
+                          <Copy className="w-4 h-4 mr-2" />
+                          Copiar
+                        </Button>
+                      </div>
+                      <div className="text-black/80 font-mono text-sm whitespace-pre-wrap bg-white/60 p-3 rounded-xl border border-white/80">
+                        {item}
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
               <Separator className="my-6" />
             </>

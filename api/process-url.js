@@ -46,15 +46,15 @@ Genera una "Cápsula de Acción" en JSON con esta estructura exacta:
   "tags": ["tag1", "tag2", "tag3"],
   "readTime": 30,
   "keyInsights": ["Insight clave 1", "Insight clave 2"],
+  "clipboardReady": ["Prompt, dirección o comando técnico para copiar/pegar"],
   "deadline": null
 }
 
-REGLAS:
-- HIGH priority: Requiere acción inmediata
-- MEDIUM priority: Importante pero no urgente
-- LOW priority: Informativo, referencia futura
 - Las acciones deben ser específicas y ejecutables
-- Responde SOLO con JSON válido, sin markdown`;
+- Responde SOLO con JSON válido, sin markdown
+- CLÁUSULA ANTIFANTASÍA: Analiza SOLO el contenido proporcionado. Si no hay texto o el contenido está vacío, responde que no hay información suficiente. NO INVENTES CONTENIDO.
+- PARA TWITTER: Si el contenido del tweet es breve o falta, limítate a lo que hay. NO supongas el hilo o el contexto si no está en el texto extraído.
+- clipboardReady: Extrae CUALQUIER prompt mencionado, dirección física, comando de terminal, o fragmento de código que sea útil para copiar y pegar directamente en otro LLM o herramienta. Si no hay nada relevante, devuelve una lista vacía.`;
 
 function generateId() {
   return `cap_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -69,6 +69,45 @@ function extractYouTubeVideoId(url) {
   for (const pattern of patterns) {
     const match = url.match(pattern);
     if (match) return match[1];
+  }
+  return null;
+}
+
+async function fetchFromFxTwitter(tweetId) {
+  const url = `https://api.fxtwitter.com/status/${tweetId}`;
+  const response = await fetch(url, { headers: { 'User-Agent': 'FocusBrief/1.0' } });
+  if (!response.ok) throw new Error(`fxtwitter HTTP ${response.status}`);
+  const data = await response.json();
+  if (data.code !== 200 || !data.tweet) throw new Error(`Tweet not found`);
+  return `AUTOR: ${data.tweet.author?.name} (@${data.tweet.author?.screen_name})\nCONTENIDO: ${data.tweet.text || data.tweet.raw_text?.text}`;
+}
+
+async function fetchFromVxTwitter(tweetId) {
+  const url = `https://api.vxtwitter.com/status/${tweetId}`;
+  const response = await fetch(url, { headers: { 'User-Agent': 'FocusBrief/1.0' } });
+  if (!response.ok) throw new Error(`vxtwitter HTTP ${response.status}`);
+  const data = await response.json();
+  if (!data.text) throw new Error('No text');
+  return `AUTOR: ${data.user_name} (@${data.user_screen_name})\nCONTENIDO: ${data.text}`;
+}
+
+async function fetchFromSyndication(tweetId) {
+  const url = `https://cdn.syndication.twimg.com/tweet-result?id=${tweetId}`;
+  const response = await fetch(url, { headers: { 'User-Agent': 'Mozilla/5.0' } });
+  if (!response.ok) throw new Error(`syndication HTTP ${response.status}`);
+  const data = await response.json();
+  if (!data.text) throw new Error('No text');
+  return `AUTOR: ${data.user?.name} (@${data.user?.screen_name})\nCONTENIDO: ${data.text}`;
+}
+
+async function fetchTweetContent(tweetId) {
+  const methods = [fetchFromFxTwitter, fetchFromVxTwitter, fetchFromSyndication];
+  for (const method of methods) {
+    try {
+      return await method(tweetId);
+    } catch (e) {
+      console.warn(`Twitter method failed:`, e.message);
+    }
   }
   return null;
 }
@@ -150,9 +189,10 @@ Responde SOLO con el JSON de la Cápsula de Acción.`
       ];
     } else if (isTwitter) {
       sourceType = 'twitter';
-      const tweetId = url.match(/(?:twitter\.com|x\.com)\/\w+\/status\/(\d+)/)?.[1];
+      const tweetId = url.match(/(?:twitter\.com|x\.com|vxtwitter\.com|fxtwitter\.com)\/(?:#!\/)?(?:[^/?#]+)\/status\/(\d+)/)?.[1];
 
       if (!tweetId) {
+<<<<<<< HEAD
         return new Response(JSON.stringify({
           success: false,
           error: 'URL de tweet inválida. Asegúrate de copiar la URL completa del tweet.'
@@ -187,13 +227,26 @@ Responde SOLO con el JSON de la Cápsula de Acción.`
         }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+=======
+        return res.status(400).json({
+          success: false,
+          error: 'URL de tweet inválida. Asegúrate de copiar la URL completa del tweet.'
+        });
+      }
+
+      const tweetContent = await fetchTweetContent(tweetId);
+
+      if (!tweetContent) {
+        return res.status(400).json({
+          success: false,
+          error: 'No se pudo obtener el contenido del tweet. Es posible que sea privado o que el servicio de extracción esté caído temporalmente.'
+>>>>>>> 11087b6 (fix(ai): improve twitter/x url parsing to handle tracking parameters)
         });
       }
 
       contentParts = [{
         text: `Analiza este Tweet y genera una Cápsula de Acción.
-
-IMPORTANTE: Si el Tweet contiene imágenes o videos, fxtwitter nos proporciona el texto y metadatos.
+IMPORTANTE: Basa tu análisis ÚNICAMENTE en este texto. Si el texto es corto, no inventes contexto.
 
 ${tweetContent}
 
